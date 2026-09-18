@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Information about the registered user",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "bio": { "type": "string" },
+        "schoolOrUniv": { "type": "string" },
+        "targetExam": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email"]
+    },
+    "courses": {
+      "title": "Course",
+      "description": "Tutor courses created by user",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "code": { "type": "string" },
+        "instructor": { "type": "string" },
+        "category": { "type": "string" },
+        "color": { "type": "string" },
+        "orderIndex": { "type": "number" },
+        "description": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title"]
+    },
+    "materials": {
+      "title": "Course Material",
+      "description": "Sheets, documents, notes and YouTube videos",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["sheet", "document", "video", "link", "note"] },
+        "url": { "type": "string" },
+        "youtubeId": { "type": "string" },
+        "fileData": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "orderIndex": { "type": "number" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["courseId", "title", "type"]
+    },
+    "events": {
+      "title": "Calendar Event",
+      "description": "Exam date or assignment deadline",
+      "type": "object",
+      "properties": {
+        "courseId": { "type": "string" },
+        "title": { "type": "string" },
+        "type": { "type": "string", "enum": ["exam", "assignment", "quiz", "presentation", "other"] },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "priority": { "type": "string", "enum": ["high", "medium", "low"] },
+        "isCompleted": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "date", "type"]
+    },
+    "community_posts": {
+      "title": "Community Post",
+      "description": "Student feed discussion, TCAS updates, and shared course materials",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "authorTag": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "likes": { "type": "number" },
+        "likedBy": { "type": "array", "items": { "type": "string" } },
+        "comments": { "type": "array" },
+        "sharedItem": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "authorName", "content"]
+    },
+    "portfolio_items": {
+      "title": "Portfolio Item",
+      "description": "Student TCAS portfolio records: activities, academic, volunteer, certificates",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string", "enum": ["activity", "academic", "volunteer", "certificate"] },
+        "date": { "type": "string" },
+        "organization": { "type": "string" },
+        "description": { "type": "string" },
+        "reflection": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "linkUrl": { "type": "string" },
+        "hours": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "category"]
+    },
+    "shared_links": {
+      "title": "Shared Private Link",
+      "description": "Private shareable links for courses or materials",
+      "type": "object",
+      "properties": {
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "type": { "type": "string" },
+        "payload": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorId", "type", "payload"]
+    }
+  }
+}

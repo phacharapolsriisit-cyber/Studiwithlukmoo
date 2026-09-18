@@ -1,0 +1,6 @@
+{
+  "name": "Lukmoo Tutor",
+  "description": "ระบบจัดเก็บคอร์สติว จัดการชีทเรียน วิดีโอยูทูป ปฏิทินวันสอบ แฟ้มสะสมผลงาน Portfolio แบ่ง 4 ด้านเชื่อม TCASfolio และชุมชนแลกเปลี่ยนบทเรียน",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

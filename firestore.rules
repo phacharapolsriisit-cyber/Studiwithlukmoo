@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to ensure user only accesses their own data
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profile
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      // User's courses subcollection
+      match /courses/{courseId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User's materials (sheets, documents, youtube videos)
+      match /materials/{materialId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User's calendar events (exams, assignments)
+      match /events/{eventId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User's portfolio items (activities, academic, volunteer, certificates)
+      match /portfolio_items/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Community posts & shared courses/materials
+    match /community_posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+    }
+
+    // Private shared links
+    match /shared_links/{linkId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+    }
+  }
+}

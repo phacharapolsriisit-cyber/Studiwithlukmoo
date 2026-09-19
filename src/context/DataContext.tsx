@@ -253,6 +253,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHiddenTcasIds(prev => {
       const next = [...prev, id];
       setLocalData('lukmoo_hidden_tcas_ids', next);
+      
+      if (user && !user.isDemo) {
+        const profileRef = doc(db, 'users', user.uid);
+        updateDoc(profileRef, { hiddenTcasIds: next }).catch(e => console.warn('TCAS hidden sync error:', e));
+      }
+      
       return next;
     });
   };
@@ -260,6 +266,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSetShowPinnedTCAS = (show: boolean) => {
     setShowPinnedTCAS(show);
     setLocalData('lukmoo_show_pinned_tcas', show);
+    
+    if (user && !user.isDemo) {
+      const profileRef = doc(db, 'users', user.uid);
+      updateDoc(profileRef, { showPinnedTCAS: show }).catch(e => console.warn('TCAS visibility sync error:', e));
+    }
   };
 
   const pinnedTCASEvents = useMemo<CalendarEvent[]>(() => {
@@ -451,8 +462,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let unsubMaterials: () => void = () => {};
     let unsubEvents: () => void = () => {};
     let unsubPortfolio: () => void = () => {};
+    let unsubProfile: () => void = () => {};
 
     try {
+      // 0. Listen to User Profile for settings and TCAS sync
+      const profileRef = doc(db, 'users', user.uid);
+      unsubProfile = onSnapshot(profileRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.tcasCompletedIds && Array.isArray(data.tcasCompletedIds)) {
+            setTcasCompletedIds(data.tcasCompletedIds);
+            setLocalData('lukmoo_tcas_completed_ids', data.tcasCompletedIds);
+          }
+          if (data.hiddenTcasIds && Array.isArray(data.hiddenTcasIds)) {
+            setHiddenTcasIds(data.hiddenTcasIds);
+            setLocalData('lukmoo_hidden_tcas_ids', data.hiddenTcasIds);
+          }
+          if (typeof data.showPinnedTCAS === 'boolean') {
+            setShowPinnedTCAS(data.showPinnedTCAS);
+            setLocalData('lukmoo_show_pinned_tcas', data.showPinnedTCAS);
+          }
+        }
+      });
+
       const coursesRef = collection(db, 'users', user.uid, 'courses');
       unsubCourses = onSnapshot(coursesRef, (snapshot) => {
         const list: Course[] = [];
@@ -482,32 +514,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // are NEVER overwritten by older snapshots!
         const existingLocal = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
         const mergedCourseMap = new Map<string, Course>();
-        existingLocal.forEach(c => mergedCourseMap.set(c.id, c));
-
+        
+        // Items in Cloud are base of truth
         list.forEach(cloudItem => {
-          const localItem = mergedCourseMap.get(cloudItem.id);
-          if (!localItem) {
-            mergedCourseMap.set(cloudItem.id, cloudItem);
-          } else {
-            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
-            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+          mergedCourseMap.set(cloudItem.id, cloudItem);
+        });
 
+        // Check local items: if they are newer OR don't exist in cloud (newly added), preserve them.
+        // BUT if they exist in cloud and local is OLDER, cloud wins.
+        // IF they don't exist in cloud and local is OLD (>30s), assume deleted elsewhere.
+        const now = Date.now();
+        existingLocal.forEach(localItem => {
+          const cloudItem = mergedCourseMap.get(localItem.id);
+          const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+          
+          if (cloudItem) {
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
             if (localUpdatedTime > cloudUpdatedTime) {
-              // Local is strictly newer! Preserve local modifications (like tutor name)
-              mergedCourseMap.set(cloudItem.id, { ...cloudItem, ...localItem });
-            } else if (cloudUpdatedTime > localUpdatedTime) {
-              // Cloud is strictly newer
-              mergedCourseMap.set(cloudItem.id, { ...localItem, ...cloudItem });
-            } else {
-              // Same timestamp: merge with non-empty local fields taking precedence
-              const merged: Course = { ...cloudItem, ...localItem };
-              if (localItem.instructor && localItem.instructor.trim() && localItem.instructor !== 'ไม่ระบุผู้สอน') {
-                merged.instructor = localItem.instructor;
-              }
-              if (localItem.title && localItem.title.trim()) merged.title = localItem.title;
-              if (localItem.code && localItem.code.trim()) merged.code = localItem.code;
-              if (localItem.roomOrPlatform && localItem.roomOrPlatform.trim()) merged.roomOrPlatform = localItem.roomOrPlatform;
-              mergedCourseMap.set(cloudItem.id, merged);
+              // Local is strictly newer! Preserve local modifications
+              mergedCourseMap.set(localItem.id, { ...cloudItem, ...localItem });
+            }
+          } else {
+            // IF they don't exist in cloud and local is OLD (>5 mins), assume deleted elsewhere.
+            const isVeryNew = (now - localUpdatedTime) < 300000;
+            if (isVeryNew) {
+              mergedCourseMap.set(localItem.id, localItem);
             }
           }
         });
@@ -558,27 +589,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Intelligent timestamp-aware merge for materials
         const existingLocal = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
         const mergedMatMap = new Map<string, CourseMaterial>();
-        existingLocal.forEach(m => mergedMatMap.set(m.id, m));
-
+        
         list.forEach(cloudItem => {
-          const localItem = mergedMatMap.get(cloudItem.id);
-          if (!localItem) {
-            mergedMatMap.set(cloudItem.id, cloudItem);
-          } else {
-            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
-            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+          mergedMatMap.set(cloudItem.id, cloudItem);
+        });
 
+        const now = Date.now();
+        existingLocal.forEach(localItem => {
+          const cloudItem = mergedMatMap.get(localItem.id);
+          const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+          
+          if (cloudItem) {
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
             if (localUpdatedTime > cloudUpdatedTime) {
-              mergedMatMap.set(cloudItem.id, { ...cloudItem, ...localItem });
-            } else if (cloudUpdatedTime > localUpdatedTime) {
-              mergedMatMap.set(cloudItem.id, { ...localItem, ...cloudItem });
-            } else {
-              const merged: CourseMaterial = { ...cloudItem, ...localItem };
-              if (localItem.title && localItem.title.trim()) merged.title = localItem.title;
-              if (localItem.notes && localItem.notes.trim()) merged.notes = localItem.notes;
-              if (localItem.url && localItem.url.trim()) merged.url = localItem.url;
-              if (localItem.duration && localItem.duration.trim()) merged.duration = localItem.duration;
-              mergedMatMap.set(cloudItem.id, merged);
+              mergedMatMap.set(localItem.id, { ...cloudItem, ...localItem });
+            }
+          } else {
+            const isVeryNew = (now - localUpdatedTime) < 300000;
+            if (isVeryNew) {
+              mergedMatMap.set(localItem.id, localItem);
             }
           }
         });
@@ -614,27 +643,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Intelligent timestamp-aware merge for events
         const existingLocal = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
         const mergedEvMap = new Map<string, CalendarEvent>();
-        existingLocal.forEach(e => mergedEvMap.set(e.id, e));
-
+        
         list.forEach(cloudItem => {
-          const localItem = mergedEvMap.get(cloudItem.id);
-          if (!localItem) {
-            mergedEvMap.set(cloudItem.id, cloudItem);
-          } else {
-            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
-            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+          mergedEvMap.set(cloudItem.id, cloudItem);
+        });
 
+        const now = Date.now();
+        existingLocal.forEach(localItem => {
+          const cloudItem = mergedEvMap.get(localItem.id);
+          const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+          
+          if (cloudItem) {
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
             if (localUpdatedTime > cloudUpdatedTime) {
-              mergedEvMap.set(cloudItem.id, { ...cloudItem, ...localItem });
-            } else if (cloudUpdatedTime > localUpdatedTime) {
-              mergedEvMap.set(cloudItem.id, { ...localItem, ...cloudItem });
-            } else {
-              const merged: CalendarEvent = { ...cloudItem, ...localItem };
-              if (localItem.title && localItem.title.trim()) merged.title = localItem.title;
-              if (localItem.date && localItem.date.trim()) merged.date = localItem.date;
-              if (localItem.time && localItem.time.trim()) merged.time = localItem.time;
-              if (localItem.notes && localItem.notes.trim()) merged.notes = localItem.notes;
-              mergedEvMap.set(cloudItem.id, merged);
+              mergedEvMap.set(localItem.id, { ...cloudItem, ...localItem });
+            }
+          } else {
+            const isVeryNew = (now - localUpdatedTime) < 300000;
+            if (isVeryNew) {
+              mergedEvMap.set(localItem.id, localItem);
             }
           }
         });
@@ -662,20 +689,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const existingLocal = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
         const mergedPortMap = new Map<string, PortfolioItem>();
-        existingLocal.forEach(p => mergedPortMap.set(p.id, p));
-
+        
         list.forEach(cloudItem => {
-          const localItem = mergedPortMap.get(cloudItem.id);
-          if (!localItem) {
-            mergedPortMap.set(cloudItem.id, cloudItem);
-          } else {
-            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
-            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+          mergedPortMap.set(cloudItem.id, cloudItem);
+        });
 
+        const now = Date.now();
+        existingLocal.forEach(localItem => {
+          const cloudItem = mergedPortMap.get(localItem.id);
+          const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+          
+          if (cloudItem) {
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
             if (localUpdatedTime > cloudUpdatedTime) {
-              mergedPortMap.set(cloudItem.id, { ...cloudItem, ...localItem });
-            } else {
-              mergedPortMap.set(cloudItem.id, { ...localItem, ...cloudItem });
+              mergedPortMap.set(localItem.id, { ...cloudItem, ...localItem });
+            }
+          } else {
+            const isVeryNew = (now - localUpdatedTime) < 300000;
+            if (isVeryNew) {
+              mergedPortMap.set(localItem.id, localItem);
             }
           }
         });
@@ -700,11 +732,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoadingData(false);
     }
 
+    // 2. Proactively trigger a cloud sync when logging in to ensure local changes are pushed
+    if (!user.isDemo) {
+      syncWithCloud().catch(() => {});
+    }
+
     return () => {
       unsubCourses();
       unsubMaterials();
       unsubEvents();
       unsubPortfolio();
+      unsubProfile();
     };
   }, [user]);
 
@@ -1816,6 +1854,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || user.isDemo) return;
     markSyncing();
     try {
+      // 1. Sync collections
       const cachedCourses = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
       for (const c of cachedCourses) {
         await setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true });
@@ -1836,9 +1875,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setDoc(doc(db, 'users', user.uid, 'portfolio_items', p.id), sanitizeForFirestore(p), { merge: true });
       }
 
+      // 2. Sync Profile / Settings
+      const profileRef = doc(db, 'users', user.uid);
+      await updateDoc(profileRef, {
+        tcasCompletedIds,
+        hiddenTcasIds,
+        showPinnedTCAS,
+        updatedAt: new Date().toISOString(),
+      });
+
       markSynced();
     } catch (err) {
       console.error('Manual sync error:', err);
+      markSyncError();
     }
   };
 

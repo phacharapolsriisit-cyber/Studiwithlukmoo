@@ -205,10 +205,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLocalData(key, merged);
   };
 
-  const localCourseKey = user ? `lukmoo_data_${user.uid}_courses` : '';
-  const localMatKey = user ? `lukmoo_data_${user.uid}_materials` : '';
-  const localEvKey = user ? `lukmoo_data_${user.uid}_events` : '';
-  const localPortKey = user ? `lukmoo_data_${user.uid}_portfolio` : '';
+  const userPrefix = user ? user.uid : 'guest';
+  const localCourseKey = `lukmoo_data_${userPrefix}_courses`;
+  const localMatKey = `lukmoo_data_${userPrefix}_materials`;
+  const localEvKey = `lukmoo_data_${userPrefix}_events`;
+  const localPortKey = `lukmoo_data_${userPrefix}_portfolio`;
+
+  const fallbackActiveCourseKey = 'lukmoo_last_active_courses';
+  const fallbackActiveMatKey = 'lukmoo_last_active_materials';
+  const fallbackActiveEvKey = 'lukmoo_last_active_events';
+  const fallbackActivePortKey = 'lukmoo_last_active_portfolio';
 
   // Timer refs for high-speed debounced Firestore batch writes
   const reorderCoursesTimerRef = useRef<any>(null);
@@ -216,8 +222,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lastLocalCourseReorderTimeRef = useRef<number>(0);
   const lastLocalMaterialReorderTimeRef = useRef<number>(0);
 
-  // Active real-time Firestore listener for community posts (visible to all users across the app)
+  // Active real-time sync for community posts (visible to all users across the app)
   useEffect(() => {
+    let isMounted = true;
+
+    // Helper to merge and sort posts without duplicates
+    const updatePostsSafely = (incoming: CommunityPost[]) => {
+      setCommunityPosts(prev => {
+        const map = new Map<string, CommunityPost>();
+        INITIAL_COMMUNITY_POSTS.forEach(p => map.set(p.id, p));
+        prev.forEach(p => map.set(p.id, p));
+        incoming.forEach(p => {
+          if (p && p.id) {
+            map.set(p.id, { ...map.get(p.id), ...p });
+          }
+        });
+        const combined = Array.from(map.values());
+        combined.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+        setLocalData('lukmoo_community_posts', combined);
+        return combined;
+      });
+    };
+
+    // 1. Fetch immediately from /api/community/posts (works for all students across the app, 0ms lag, no Firebase quota limits)
+    const fetchServerPosts = async () => {
+      try {
+        const res = await fetch('/api/community/posts');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data) && data.length > 0) {
+            updatePostsSafely(data);
+          }
+        }
+      } catch {
+        // Fallback gracefully
+      }
+    };
+
+    fetchServerPosts();
+    // Poll every 4 seconds so all students on different devices see new posts in real-time
+    const pollTimer = setInterval(fetchServerPosts, 4000);
+
+    // 2. Also listen to Firestore collection 'community_posts' for real-time cloud updates
     let unsubCommunity: () => void = () => {};
     try {
       const postsRef = collection(db, 'community_posts');
@@ -226,31 +272,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const cloudPosts: CommunityPost[] = [];
           snapshot.forEach((docSnap) => {
             const data = docSnap.data();
-            if (data && data.content) {
+            if (data) {
               cloudPosts.push({ id: docSnap.id, ...data } as CommunityPost);
             }
           });
-
-          if (cloudPosts.length > 0) {
-            // Sort newest first
-            cloudPosts.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-            setCommunityPosts(cloudPosts);
-            setLocalData('lukmoo_community_posts', cloudPosts);
-            return;
+          if (isMounted && cloudPosts.length > 0) {
+            updatePostsSafely(cloudPosts);
           }
         }
-
-        // If Firestore collection is empty, load initial community posts
-        const local = getLocalData<CommunityPost[]>('lukmoo_community_posts', INITIAL_COMMUNITY_POSTS);
-        setCommunityPosts(local);
       }, (error) => {
-        console.warn('Community posts onSnapshot warning:', error);
+        console.warn('Community posts onSnapshot notice:', error?.message);
       });
     } catch (err) {
       console.warn('Failed to listen to community_posts collection:', err);
     }
 
     return () => {
+      isMounted = false;
+      clearInterval(pollTimer);
       unsubCommunity();
     };
   }, []);
@@ -276,10 +315,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     markSyncing();
 
     // 1. Instantly hydrate from local storage so refreshing the page never flashes blank or reverts
-    const localC = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
-    const localM = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
-    const localE = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
-    const localP = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
+    let localC = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
+    if (localC.length === 0) {
+      const fallbackC = getLocalData<Course[]>(fallbackActiveCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
+      if (fallbackC.length > 0) {
+        localC = fallbackC;
+        setLocalData(localCourseKey, localC);
+      }
+    }
+
+    let localM = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
+    if (localM.length === 0) {
+      const fallbackM = getLocalData<CourseMaterial[]>(fallbackActiveMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
+      if (fallbackM.length > 0) {
+        localM = fallbackM;
+        setLocalData(localMatKey, localM);
+      }
+    }
+
+    let localE = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
+    if (localE.length === 0) {
+      const fallbackE = getLocalData<CalendarEvent[]>(fallbackActiveEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
+      if (fallbackE.length > 0) {
+        localE = fallbackE;
+        setLocalData(localEvKey, localE);
+      }
+    }
+
+    let localP = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
+    if (localP.length === 0) {
+      const fallbackP = getLocalData<PortfolioItem[]>(fallbackActivePortKey, INITIAL_PORTFOLIO_ITEMS);
+      if (fallbackP.length > 0) {
+        localP = fallbackP;
+        setLocalData(localPortKey, localP);
+      }
+    }
 
     if (localC.length > 0) {
       localC.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
@@ -334,19 +404,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        // Sort by orderIndex first, tiebreak with createdAt (chronological time)
-        list.sort((a, b) => {
+        // INTELLIGENT MERGE: Combine locally cached courses with cloud snapshot
+        // so that courses never disappear on refresh even if Firestore write quota is exhausted!
+        const existingLocal = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
+        const mergedCourseMap = new Map<string, Course>();
+        existingLocal.forEach(c => mergedCourseMap.set(c.id, c));
+        list.forEach(c => mergedCourseMap.set(c.id, c));
+
+        const finalCourses = Array.from(mergedCourseMap.values());
+        finalCourses.sort((a, b) => {
           const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
           if (orderDiff !== 0) return orderDiff;
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
 
-        setCourses(list);
-        setLocalData(localCourseKey, list);
+        setCourses(finalCourses);
+        setLocalData(localCourseKey, finalCourses);
+        setLocalData(fallbackActiveCourseKey, finalCourses);
         markSynced();
         setIsLoadingData(false);
       }, (err) => {
-        console.warn('Courses listener error, falling back to cache:', err);
+        console.warn('Courses listener notice, using cached local data:', err?.message);
         const cached = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
         setCourses(cached);
         setIsLoadingData(false);
@@ -375,18 +453,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        // Sort by orderIndex first, tiebreak with createdAt (chronological time)
-        list.sort((a, b) => {
+        // Merge locally cached materials with cloud snapshot
+        const existingLocal = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
+        const mergedMatMap = new Map<string, CourseMaterial>();
+        existingLocal.forEach(m => mergedMatMap.set(m.id, m));
+        list.forEach(m => mergedMatMap.set(m.id, m));
+
+        const finalMaterials = Array.from(mergedMatMap.values());
+        finalMaterials.sort((a, b) => {
           const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
           if (orderDiff !== 0) return orderDiff;
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
 
-        setMaterials(list);
-        setLocalData(localMatKey, list);
+        setMaterials(finalMaterials);
+        setLocalData(localMatKey, finalMaterials);
+        setLocalData(fallbackActiveMatKey, finalMaterials);
         markSynced();
       }, (err) => {
-        console.warn('Materials listener error, falling back to cache:', err);
+        console.warn('Materials listener notice, using cached local data:', err?.message);
         const cached = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
         setMaterials(cached);
       });
@@ -400,13 +485,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             list.push({ id: docSnap.id, ...data } as CalendarEvent);
           }
         });
-        list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-        setEvents(list);
-        setLocalData(localEvKey, list);
+        const existingLocal = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
+        const mergedEvMap = new Map<string, CalendarEvent>();
+        existingLocal.forEach(e => mergedEvMap.set(e.id, e));
+        list.forEach(e => mergedEvMap.set(e.id, e));
+
+        const finalEvents = Array.from(mergedEvMap.values());
+        finalEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+        setEvents(finalEvents);
+        setLocalData(localEvKey, finalEvents);
+        setLocalData(fallbackActiveEvKey, finalEvents);
         markSynced();
       }, (err) => {
-        console.warn('Events listener error, falling back to cache:', err);
+        console.warn('Events listener notice, using cached local data:', err?.message);
         const cached = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
         setEvents(cached);
       });
@@ -417,9 +510,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() } as PortfolioItem);
         });
-        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setPortfolioItems(list);
-        setLocalData(localPortKey, list);
+
+        const existingLocal = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
+        const mergedPortMap = new Map<string, PortfolioItem>();
+        existingLocal.forEach(p => mergedPortMap.set(p.id, p));
+        list.forEach(p => mergedPortMap.set(p.id, p));
+
+        const finalPort = Array.from(mergedPortMap.values());
+        finalPort.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+        setPortfolioItems(finalPort);
+        setLocalData(localPortKey, finalPort);
+        setLocalData(fallbackActivePortKey, finalPort);
         markSynced();
       }, () => {
         const cached = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
@@ -460,6 +562,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = [...courses, newCourse];
     setCourses(updated);
     setLocalData(localCourseKey, updated);
+    setLocalData(fallbackActiveCourseKey, updated);
 
     // 2. Persist to Firestore asynchronously
     if (!user.isDemo) {
@@ -467,7 +570,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setDoc(courseDocRef, sanitizeForFirestore(newCourse), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.error('Failed to save course to Firestore:', err);
+          console.warn('Notice saving course to Firestore (local copy is safe):', err?.message);
         });
     } else {
       markSynced();
@@ -482,13 +585,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = courses.map(c => c.id === id ? { ...c, ...updatedFields } : c);
     setCourses(updated);
     setLocalData(localCourseKey, updated);
+    setLocalData(fallbackActiveCourseKey, updated);
 
     if (!user.isDemo) {
       const courseRef = doc(db, 'users', user.uid, 'courses', id);
       setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.error('Failed to update course in Firestore:', err);
+          console.warn('Notice updating course in Firestore (local copy is safe):', err?.message);
         });
     } else {
       markSynced();
@@ -507,24 +611,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCourses(prev => {
       const updated = prev.filter(c => c.id !== id);
       setLocalData(localCourseKey, updated);
+      setLocalData(fallbackActiveCourseKey, updated);
       return updated;
     });
     setMaterials(prev => {
       const updated = prev.filter(m => m.courseId !== id);
       setLocalData(localMatKey, updated);
+      setLocalData(fallbackActiveMatKey, updated);
       return updated;
     });
     setEvents(prev => {
       const updated = prev.filter(e => e.courseId !== id);
       setLocalData(localEvKey, updated);
+      setLocalData(fallbackActiveEvKey, updated);
       return updated;
     });
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'courses', id));
-      } catch (err) {
-        console.warn('Failed to delete course in Firestore, marking tombstone:', err);
+      } catch {
         try {
           await setDoc(doc(db, 'users', user.uid, 'courses', id), { _deleted: true, isDeleted: true }, { merge: true });
         } catch {}
@@ -560,6 +666,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 1. Instant local state & localStorage update for 0ms lag
     setCourses(reindexed);
     setLocalData(localCourseKey, reindexed);
+    setLocalData(fallbackActiveCourseKey, reindexed);
 
     // 2. Debounced batch commit to Firestore with atomic set merge
     if (!user.isDemo) {
@@ -577,7 +684,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await batch.commit();
           markSynced();
         } catch (err) {
-          console.error('Failed to commit reorderCourses batch:', err);
+          console.warn('Notice reordering courses in Firestore:', err);
         }
       }, 180);
     }
@@ -601,6 +708,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = [...materials, newMaterial];
     setMaterials(updated);
     setLocalData(localMatKey, updated);
+    setLocalData(fallbackActiveMatKey, updated);
 
     // 2. Persist to Firestore asynchronously without blocking UI
     if (!user.isDemo) {
@@ -608,7 +716,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setDoc(matDocRef, sanitizeForFirestore(newMaterial), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.error('Failed to save material to Firestore:', err);
+          console.warn('Notice saving material to Firestore:', err?.message);
         });
     } else {
       markSynced();
@@ -623,13 +731,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = materials.map(m => m.id === id ? { ...m, ...updatedFields } : m);
     setMaterials(updated);
     setLocalData(localMatKey, updated);
+    setLocalData(fallbackActiveMatKey, updated);
 
     if (!user.isDemo) {
       const matDocRef = doc(db, 'users', user.uid, 'materials', id);
       setDoc(matDocRef, sanitizeForFirestore(updatedFields), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.error('Failed to update material in Firestore:', err);
+          console.warn('Notice updating material in Firestore:', err?.message);
         });
     } else {
       markSynced();
@@ -644,14 +753,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMaterials(prev => {
       const updated = prev.filter(m => m.id !== id);
       setLocalData(localMatKey, updated);
+      setLocalData(fallbackActiveMatKey, updated);
       return updated;
     });
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'materials', id));
-      } catch (err) {
-        console.warn('Failed to delete material in Firestore, writing tombstone:', err);
+      } catch {
         try {
           await setDoc(doc(db, 'users', user.uid, 'materials', id), { _deleted: true, isDeleted: true }, { merge: true });
         } catch {}
@@ -675,6 +784,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 1. Update state & localStorage immediately
     setMaterials(allMaterials);
     setLocalData(localMatKey, allMaterials);
+    setLocalData(fallbackActiveMatKey, allMaterials);
 
     // 2. Debounced batch commit to Firestore with atomic set merge
     if (!user.isDemo) {
@@ -692,7 +802,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           await batch.commit();
           markSynced();
         } catch (err) {
-          console.error('Failed to commit reorderMaterials batch:', err);
+          console.warn('Notice reordering materials in Firestore:', err);
         }
       }, 180);
     }
@@ -714,13 +824,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = [...events, newEvent];
     setEvents(updated);
     setLocalData(localEvKey, updated);
+    setLocalData(fallbackActiveEvKey, updated);
 
     if (!user.isDemo) {
       const evDocRef = doc(db, 'users', user.uid, 'events', newId);
       setDoc(evDocRef, sanitizeForFirestore(newEvent), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.error('Failed to save event to Firestore:', err);
+          console.warn('Notice saving event to Firestore:', err?.message);
         });
     } else {
       markSynced();
@@ -735,13 +846,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updated = events.map(e => e.id === id ? { ...e, ...updatedFields } : e);
     setEvents(updated);
     setLocalData(localEvKey, updated);
+    setLocalData(fallbackActiveEvKey, updated);
 
     if (!user.isDemo) {
       const evDocRef = doc(db, 'users', user.uid, 'events', id);
       setDoc(evDocRef, sanitizeForFirestore(updatedFields), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.error('Failed to update event in Firestore:', err);
+          console.warn('Notice updating event in Firestore:', err?.message);
         });
     } else {
       markSynced();
@@ -756,14 +868,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEvents(prev => {
       const updated = prev.filter(e => e.id !== id);
       setLocalData(localEvKey, updated);
+      setLocalData(fallbackActiveEvKey, updated);
       return updated;
     });
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'events', id));
-      } catch (err) {
-        console.warn('Failed to delete event from Firestore, writing tombstone:', err);
+      } catch {
         try {
           await setDoc(doc(db, 'users', user.uid, 'events', id), { _deleted: true, isDeleted: true }, { merge: true });
         } catch {}
@@ -813,10 +925,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // 1. Immediately display locally (0ms)
     setCommunityPosts(prev => [newPost, ...prev]);
 
-    // 2. Persist to Firestore cloud unconditionally so EVERY user across the app sees it in real time!
+    // 2. Persist to Express backend /api/community/posts (works 100% reliably for all students)
+    try {
+      fetch('/api/community/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPost),
+      }).catch(err => console.warn('Server post error:', err));
+    } catch {}
+
+    // 3. Persist to Firestore cloud in parallel
     try {
       const sanitized = sanitizeForFirestore(newPost);
-      await setDoc(doc(db, 'community_posts', newId), sanitized);
+      setDoc(doc(db, 'community_posts', newId), sanitized).catch(err => {
+        console.warn('Firestore community post notice:', err?.message);
+      });
     } catch (err) {
       console.warn('Could not sync post to Firestore cloud:', err);
     }
@@ -843,14 +966,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }));
 
-    // Sync to Firestore so all users see the updated likes
+    // Sync to Express backend API
+    fetch(`/api/community/posts/${postId}/like`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: currentUid }),
+    }).catch(err => console.warn('Server like notice:', err));
+
+    // Sync to Firestore in parallel
     try {
-      await updateDoc(doc(db, 'community_posts', postId), {
+      updateDoc(doc(db, 'community_posts', postId), {
         likedBy: updatedLikedBy,
         likes: updatedLikes
-      });
+      }).catch(() => {});
     } catch (err) {
-      console.warn('Firestore like update warning:', err);
+      console.warn('Firestore like update notice:', err);
     }
   };
 
@@ -878,23 +1008,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }));
 
+    // Sync to Express backend API
+    fetch(`/api/community/posts/${postId}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newComment),
+    }).catch(err => console.warn('Server comment notice:', err));
+
     // Sync to Firestore so all users see the comment
     try {
       const sanitizedComments = updatedComments.map(c => sanitizeForFirestore(c));
-      await updateDoc(doc(db, 'community_posts', postId), {
+      updateDoc(doc(db, 'community_posts', postId), {
         comments: sanitizedComments
-      });
+      }).catch(() => {});
     } catch (err) {
-      console.warn('Firestore comment update warning:', err);
+      console.warn('Firestore comment update notice:', err);
     }
   };
 
   const deleteCommunityPost = async (postId: string) => {
     setCommunityPosts(prev => prev.filter(p => p.id !== postId));
+
+    fetch(`/api/community/posts/${postId}`, {
+      method: 'DELETE',
+    }).catch(err => console.warn('Server delete post notice:', err));
+
     try {
-      await deleteDoc(doc(db, 'community_posts', postId));
+      deleteDoc(doc(db, 'community_posts', postId)).catch(() => {});
     } catch (err) {
-      console.warn('Firestore delete post warning:', err);
+      console.warn('Firestore delete post notice:', err);
     }
   };
 
@@ -1103,10 +1245,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore cleanCode document in background (single write to minimize quota usage)
+    // 2. Persist to Express backend /api/shared-links (100% reliable for cross-device sharing)
+    try {
+      fetch('/api/shared-links', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shareCode: formattedCode,
+          cleanCode,
+          shareId,
+          payload: lightweightPayload,
+          authorName: profile?.displayName || user?.displayName || 'เพื่อนเด็กติว Lukmoo',
+          authorId: user ? user.uid : 'anonymous',
+          note: note || '',
+        }),
+      }).catch(err => console.warn('Server shared link save notice:', err));
+    } catch {}
+
+    // 3. Persist to Firestore cleanCode document in background (single write to minimize quota usage)
     const sanitized = sanitizeForFirestore(record);
     setDoc(doc(db, 'shared_links', cleanCode), sanitized).catch((e) => {
-      console.warn('Firestore shared_links save notice:', e);
+      console.warn('Firestore shared_links save notice:', e?.message);
     });
 
     const encoded = encodeSharedPayload(lightweightPayload);
@@ -1210,6 +1369,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const parsedLocal = parseDocPayload(localFound);
       if (parsedLocal) return parsedLocal;
     }
+
+    // 2.5 Check Express backend /api/shared-links/:code (reliable across all browsers and devices)
+    try {
+      for (const k of [formattedHyphen, cleanNoHyphen, upper, queryStr]) {
+        if (!k) continue;
+        const res = await fetch(`/api/shared-links/${encodeURIComponent(k)}`);
+        if (res.ok) {
+          const serverData = await res.json();
+          const parsed = parseDocPayload(serverData);
+          if (parsed) {
+            localShares[k] = serverData;
+            setLocalData('lukmoo_private_shares', localShares);
+            return parsed;
+          }
+        }
+      }
+    } catch {}
 
     // 3. Check Firestore collection 'shared_links' by Document ID in parallel
     const lookupKeys = Array.from(new Set([

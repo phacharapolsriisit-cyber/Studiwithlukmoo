@@ -83,7 +83,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 // LocalStorage helpers for offline or demo user persistence
-const getLocalData = <T,>(key: string, fallback: T): T => {
+export const getLocalData = <T,>(key: string, fallback: T): T => {
   try {
     const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : fallback;
@@ -92,11 +92,87 @@ const getLocalData = <T,>(key: string, fallback: T): T => {
   }
 };
 
-const setLocalData = <T,>(key: string, data: T) => {
+export const setLocalData = <T,>(key: string, data: T) => {
   try {
     localStorage.setItem(key, JSON.stringify(data));
   } catch {}
 };
+
+// Compact URL / Base64 encoding for 100% reliable 1-click sharing without database quota dependency
+export function encodeSharedPayload(payload: SharedItemPayload): string {
+  try {
+    const compact = {
+      t: payload.title || '',
+      c: payload.category || 'other',
+      i: payload.instructor || '',
+      d: payload.description || '',
+      tp: payload.type || 'course',
+      m: payload.materials?.map(m => ({
+        t: m.title || '',
+        y: m.youtubeId || '',
+        u: m.url || '',
+        tp: m.type || 'video',
+        o: m.orderIndex || 0,
+        n: m.notes || '',
+        d: m.duration || '',
+      }))
+    };
+    const jsonStr = JSON.stringify(compact);
+    const bytes = new TextEncoder().encode(jsonStr);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+export function decodeSharedPayload(encoded: string): SharedItemPayload | null {
+  try {
+    if (!encoded) return null;
+    let base64 = encoded.trim().replace(/-/g, '+').replace(/_/g, '/');
+    while (base64.length % 4) base64 += '=';
+
+    let compact: any = null;
+    try {
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      compact = JSON.parse(new TextDecoder().decode(bytes));
+    } catch {
+      // Fallback for older format
+      const decodedStr = decodeURIComponent(Array.prototype.map.call(atob(base64), (c: string) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      compact = JSON.parse(decodedStr);
+    }
+
+    if (!compact || (!compact.t && !compact.title)) return null;
+    const title = compact.t || compact.title;
+    return {
+      title,
+      category: compact.c || compact.category,
+      instructor: compact.i || compact.instructor,
+      description: compact.d || compact.description,
+      type: compact.tp || compact.type || 'course',
+      materials: (compact.m || compact.materials)?.map((m: any, idx: number) => ({
+        title: m.t || m.title || `บทที่ ${idx + 1}`,
+        type: m.tp || m.type || 'video',
+        youtubeId: m.y || m.youtubeId || '',
+        url: m.u || m.url || (m.y ? `https://youtu.be/${m.y}` : ''),
+        orderIndex: m.o ?? m.orderIndex ?? idx,
+        notes: m.n || m.notes || '',
+        duration: m.d || m.duration || '',
+      }))
+    };
+  } catch {
+    return null;
+  }
+}
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, markSyncing, markSynced } = useAuth();
@@ -1027,18 +1103,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore across alias document IDs in background
+    // 2. Persist to Firestore cleanCode document in background (single write to minimize quota usage)
     const sanitized = sanitizeForFirestore(record);
-    Promise.all([
-      setDoc(doc(db, 'shared_links', cleanCode), sanitized),
-      setDoc(doc(db, 'shared_links', formattedCode), sanitized),
-      setDoc(doc(db, 'shared_links', shareId), sanitized),
-    ]).catch((e) => {
-      console.warn('Firestore shared_links save error:', e);
+    setDoc(doc(db, 'shared_links', cleanCode), sanitized).catch((e) => {
+      console.warn('Firestore shared_links save notice:', e);
     });
 
+    const encoded = encodeSharedPayload(lightweightPayload);
     const baseUrl = window.location.origin + window.location.pathname;
-    const shareUrl = `${baseUrl}?code=${formattedCode}`;
+    const shareUrl = encoded 
+      ? `${baseUrl}#code=${formattedCode}&import=${encoded}`
+      : `${baseUrl}?code=${formattedCode}`;
 
     return {
       url: shareUrl,
@@ -1052,15 +1127,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let queryStr = (shareCodeOrQuery || shareId || '').trim();
 
+    // 0. Immediate decode if input contains self-contained payload (0ms, 100% reliable, no server quota needed)
+    if (queryStr.includes('import=')) {
+      const match = queryStr.match(/import=([A-Za-z0-9+/=%_-]+)/i);
+      if (match) {
+        const decoded = decodeSharedPayload(decodeURIComponent(match[1]));
+        if (decoded && decoded.title) return decoded;
+      }
+    }
+    if (queryStr.length > 25 && /^[A-Za-z0-9+/=_-]+$/.test(queryStr)) {
+      const decoded = decodeSharedPayload(queryStr);
+      if (decoded && decoded.title) return decoded;
+    }
+
     // 1. Intelligently extract code from Thai invite message, Line message, or raw text
     const lmRegexMatch = queryStr.match(/LM-?[A-Z0-9]{4}/i);
     if (lmRegexMatch) {
       queryStr = lmRegexMatch[0];
-    } else if (queryStr.includes('?') || queryStr.includes('http')) {
+    } else if (queryStr.includes('?') || queryStr.includes('http') || queryStr.includes('#')) {
       try {
         const urlStr = queryStr.match(/https?:\/\/[^\s]+/)?.[0] || queryStr;
-        const urlObj = new URL(urlStr, window.location.origin);
-        queryStr = urlObj.searchParams.get('code') || 
+        const hashPart = urlStr.includes('#') ? urlStr.split('#')[1] : '';
+        const hashParams = new URLSearchParams(hashPart);
+        if (hashParams.get('import')) {
+          const decoded = decodeSharedPayload(hashParams.get('import')!);
+          if (decoded && decoded.title) return decoded;
+        }
+        const urlObj = new URL(urlStr.split('#')[0], window.location.origin);
+        if (urlObj.searchParams.get('import')) {
+          const decoded = decodeSharedPayload(urlObj.searchParams.get('import')!);
+          if (decoded && decoded.title) return decoded;
+        }
+        queryStr = hashParams.get('code') ||
+                   urlObj.searchParams.get('code') || 
                    urlObj.searchParams.get('c') ||
                    urlObj.searchParams.get('share_code') || 
                    urlObj.searchParams.get('share_id') || 

@@ -84,8 +84,14 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
-        const match = text.match(/LM-?[A-Za-z0-9]{4}/i) || text.match(/[A-Za-z0-9]{6}/i) || text.match(/\b[A-Za-z0-9]{4}\b/i);
-        const codeToUse = match ? match[0].toUpperCase() : text.trim();
+        const trimmed = text.trim();
+        if (trimmed.includes('import=') || trimmed.length > 30) {
+          setCode(trimmed.substring(0, 32) + (trimmed.length > 32 ? '...' : ''));
+          await handleSearchCodeWithVal(trimmed);
+          return;
+        }
+        const match = trimmed.match(/LM-?[A-Za-z0-9]{4}/i) || trimmed.match(/[A-Za-z0-9]{6}/i) || trimmed.match(/\b[A-Za-z0-9]{4}\b/i);
+        const codeToUse = match ? match[0].toUpperCase() : trimmed;
         setCode(codeToUse);
         await handleSearchCodeWithVal(codeToUse);
       }
@@ -161,6 +167,11 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
                     onChange={(e) => {
                       const val = e.target.value;
                       if (errorMessage) setErrorMessage(null);
+                      if (val.includes('import=') || val.length > 30) {
+                        setCode(val);
+                        handleSearchCodeWithVal(val);
+                        return;
+                      }
                       const lmMatch = val.match(/LM-?[A-Za-z0-9]{4}/i);
                       if (lmMatch && val.length > 7) {
                         const extracted = lmMatch[0].toUpperCase();

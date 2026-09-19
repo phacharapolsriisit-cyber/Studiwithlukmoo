@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { DataProvider, useData } from './context/DataContext';
+import { DataProvider, useData, decodeSharedPayload } from './context/DataContext';
 import { Navbar } from './components/Navbar';
 import { AuthModal } from './components/AuthModal';
 import { DashboardView } from './components/DashboardView';
@@ -113,13 +113,32 @@ const AppContent: React.FC = () => {
   }, [user, authLoading]);
 
   // Requirement: "ส่วนแชร์วิชาเรียนขอมีการใส่ลิ้งค์เพิ่มแทนการลงชุมชนด้วยเผื่อต้องการแบบความเป็นส่วนตัว"
-  // Detect incoming private share link (?code=... or ?share_code=... or ?c=... or ?share_id=...)
+  // Detect incoming private share link (#import=... or ?import=... or ?code=... or #code=...)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const shareCode = params.get('code') || params.get('c') || params.get('share_code');
-    const shareId = params.get('share_id');
-    if (shareCode || shareId) {
-      resolvePrivateShare(shareCode || undefined, shareId || undefined).then((item) => {
+    // 1. Check hash params (e.g. #code=...&import=...)
+    const hash = window.location.hash.startsWith('#') ? window.location.hash.substring(1) : window.location.hash;
+    const hashParams = new URLSearchParams(hash);
+    const hashImport = hashParams.get('import');
+    const hashCode = hashParams.get('code');
+
+    // 2. Check query params (e.g. ?code=...&import=...)
+    const searchParams = new URLSearchParams(window.location.search);
+    const searchImport = searchParams.get('import');
+    const searchCode = searchParams.get('code') || searchParams.get('c') || searchParams.get('share_code');
+    const shareId = searchParams.get('share_id');
+
+    const rawImport = hashImport || searchImport;
+    if (rawImport) {
+      const decoded = decodeSharedPayload(decodeURIComponent(rawImport));
+      if (decoded && decoded.title) {
+        setIncomingSharedItem({ payload: decoded, shareId: hashCode || searchCode || undefined });
+        return;
+      }
+    }
+
+    const codeToResolve = hashCode || searchCode;
+    if (codeToResolve || shareId) {
+      resolvePrivateShare(codeToResolve || undefined, shareId || undefined).then((item) => {
         if (item) {
           setIncomingSharedItem({ payload: item, shareId: shareId || undefined });
         }
@@ -142,11 +161,15 @@ const AppContent: React.FC = () => {
       }
       setIncomingSharedItem(null);
 
-      // Clean up URL parameters without refreshing page
+      // Clean up URL parameters and hash without refreshing page
       const url = new URL(window.location.href);
+      url.searchParams.delete('code');
+      url.searchParams.delete('c');
       url.searchParams.delete('share_code');
       url.searchParams.delete('share_id');
-      window.history.replaceState({}, '', url.toString());
+      url.searchParams.delete('import');
+      url.hash = '';
+      window.history.replaceState({}, '', url.pathname + (url.searchParams.toString() ? '?' + url.searchParams.toString() : ''));
     } catch (err: any) {
       alert(err?.message || 'เกิดข้อผิดพลาดในการนำเข้า');
     } finally {

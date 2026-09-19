@@ -229,9 +229,22 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
   };
 
   // Handle 1-click import of shared course/material
-  const handleImport = async (sharedItem: SharedItemPayload) => {
-    const result = await importSharedItem(sharedItem);
-    showToast(result.message);
+  const [importingPostId, setImportingPostId] = useState<string | null>(null);
+  const [importedPostIds, setImportedPostIds] = useState<Record<string, boolean>>({});
+
+  const handleImport = async (sharedItem: SharedItemPayload, postId?: string) => {
+    if (postId) setImportingPostId(postId);
+    try {
+      const result = await importSharedItem(sharedItem);
+      if (postId) {
+        setImportedPostIds(prev => ({ ...prev, [postId]: true }));
+      }
+      showToast(result.message);
+    } catch {
+      showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+    } finally {
+      if (postId) setImportingPostId(null);
+    }
   };
 
   return (
@@ -683,13 +696,25 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                         </div>
 
                         {/* 1-Click Import Button */}
-                        <button
-                          onClick={() => handleImport(post.sharedItem!)}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all shrink-0 cursor-pointer"
-                        >
-                          <BookmarkPlus className="w-4 h-4" />
-                          <span>บันทึกลงคลัง</span>
-                        </button>
+                        {importedPostIds[post.id] ? (
+                          <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-100 text-emerald-800 font-semibold text-xs shrink-0 shadow-2xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>บันทึกแล้ว!</span>
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleImport(post.sharedItem!, post.id)}
+                            disabled={importingPostId === post.id}
+                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all shrink-0 cursor-pointer disabled:opacity-50"
+                          >
+                            {importingPostId === post.id ? (
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <BookmarkPlus className="w-4 h-4" />
+                            )}
+                            <span>{importingPostId === post.id ? 'กำลังบันทึก...' : 'บันทึกลงคลัง (1 คลิก)'}</span>
+                          </button>
+                        )}
                       </div>
 
                       {/* If shared item has a YouTube video and preview handler */}

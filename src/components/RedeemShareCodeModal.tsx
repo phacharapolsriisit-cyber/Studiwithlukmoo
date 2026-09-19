@@ -11,7 +11,8 @@ import {
   AlertCircle,
   Download,
   ArrowRight,
-  FolderKanban
+  FolderKanban,
+  ClipboardPaste
 } from 'lucide-react';
 import { SharedItemPayload } from '../types';
 import { useData } from '../context/DataContext';
@@ -48,9 +49,8 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSearchCode = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const clean = code.trim();
+  const handleSearchCodeWithVal = async (val: string) => {
+    const clean = val.trim();
     if (!clean) {
       setErrorMessage('กรุณากรอกรหัสแชร์ 6 หลัก หรือวางลิงก์');
       return;
@@ -72,6 +72,25 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
       setErrorMessage('เกิดข้อผิดพลาดในการค้นหาข้อมูล กรุณาลองใหม่อีกครั้ง');
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleSearchCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    await handleSearchCodeWithVal(code);
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        const match = text.match(/LM-?[A-Z0-9]{4}/i) || text.match(/[A-Z0-9]{6}/i);
+        const codeToUse = match ? match[0] : text.trim();
+        setCode(codeToUse);
+        await handleSearchCodeWithVal(codeToUse);
+      }
+    } catch {
+      // Manual input fallback if clipboard API is restricted
     }
   };
 
@@ -140,12 +159,27 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
                     placeholder="เช่น LM-8K39 หรือวางลิงก์..."
                     value={code}
                     onChange={(e) => {
-                      setCode(e.target.value);
+                      const val = e.target.value;
+                      setCode(val);
                       if (errorMessage) setErrorMessage(null);
+                      // Auto trigger search if full 6-7 char code is entered or pasted
+                      const clean = val.trim().replace(/[^A-Za-z0-9]/g, '');
+                      if (clean.length === 6) {
+                        handleSearchCodeWithVal(val);
+                      }
                     }}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm uppercase tracking-wider font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                   />
                 </div>
+                <button
+                  type="button"
+                  onClick={handlePasteFromClipboard}
+                  title="วางรหัสจากคลิปบอร์ดแล้วค้นหาทันที"
+                  className="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center gap-1 transition-all cursor-pointer shrink-0"
+                >
+                  <ClipboardPaste className="w-4 h-4 text-blue-600" />
+                  <span className="hidden sm:inline">วางรหัส</span>
+                </button>
                 <button
                   type="submit"
                   disabled={isSearching || !code.trim()}

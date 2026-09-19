@@ -59,7 +59,7 @@ interface DataContextType {
   addPortfolioItem: (item: Omit<PortfolioItem, 'id' | 'createdAt'>) => Promise<string>;
   updatePortfolioItem: (id: string, data: Partial<PortfolioItem>) => Promise<void>;
   deletePortfolioItem: (id: string) => Promise<void>;
-  createPrivateShareLink: (payload: SharedItemPayload, note?: string) => Promise<{ url: string; shareCode: string; shareId: string }>;
+  createPrivateShareLink: (payload: SharedItemPayload, note?: string, presetCode?: string) => Promise<{ url: string; shareCode: string; shareId: string }>;
   resolvePrivateShare: (shareCode?: string, shareId?: string) => Promise<SharedItemPayload | null>;
   exportBackupData: () => string;
   importBackupData: (jsonData: string) => Promise<void>;
@@ -959,16 +959,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Private share link creation with short 6-character code (optimized for instant 0ms generation)
   const createPrivateShareLink = async (
     payload: SharedItemPayload, 
-    note?: string
+    note?: string,
+    presetCode?: string
   ): Promise<{ url: string; shareCode: string; shareId: string }> => {
-    // Generate sleek, memorable 6-char share code e.g. LM-8K39
-    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
-    let rand = '';
-    for (let i = 0; i < 4; i++) {
-      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    // Generate or use preset sleek, memorable 6-char share code e.g. LM-8K39
+    let shareCode = presetCode ? presetCode.toUpperCase().trim() : '';
+    if (!shareCode) {
+      const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+      let rand = '';
+      for (let i = 0; i < 4; i++) {
+        rand += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      shareCode = `LM-${rand}`;
     }
-    const shareCode = `LM-${rand}`;
-    const cleanCode = `LM${rand}`;
+    const cleanCode = shareCode.replace(/[^A-Z0-9]/g, '');
+    const formattedCode = cleanCode.startsWith('LM') && cleanCode.length === 6 
+      ? `LM-${cleanCode.substring(2)}` 
+      : shareCode;
     const shareId = 'shr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
     // Sanitize payload to keep it ultra-lightweight (<200KB) for instant network transport
@@ -983,7 +990,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const record = {
       id: shareId,
-      shareCode,
+      shareCode: formattedCode,
       cleanCode,
       authorId: user ? user.uid : 'anonymous',
       authorName: profile?.displayName || user?.displayName || 'เพื่อนเด็กติว Lukmoo',
@@ -997,25 +1004,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
     localShares[shareCode] = record;
     localShares[cleanCode] = record;
+    localShares[formattedCode] = record;
     localShares[shareId] = record;
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore asynchronously in background so anyone can redeem this code
+    // 2. Persist to Firestore in background without blocking caller
     const sanitized = sanitizeForFirestore(record);
     Promise.all([
       setDoc(doc(db, 'shared_links', cleanCode), sanitized),
-      setDoc(doc(db, 'shared_links', shareCode), sanitized),
-      setDoc(doc(db, 'shared_links', shareId), sanitized),
+      setDoc(doc(db, 'shared_links', formattedCode), sanitized),
     ]).catch((e) => {
       console.warn('Firestore shared_links background save warning:', e);
     });
 
     const baseUrl = window.location.origin + window.location.pathname;
-    const shareUrl = `${baseUrl}?code=${shareCode}`;
+    const shareUrl = `${baseUrl}?code=${formattedCode}`;
 
     return {
       url: shareUrl,
-      shareCode,
+      shareCode: formattedCode,
       shareId,
     };
   };

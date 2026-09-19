@@ -17,12 +17,16 @@ import {
   Bell,
   ExternalLink,
   Users,
-  Edit
+  Edit,
+  Pin,
+  Table
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { Course, CalendarEvent, CourseMaterial, ActiveTab } from '../types';
 import { CATEGORIES } from '../utils/categories';
+import { TCASScheduleModal } from './TCASScheduleModal';
+import { TCAS70_METADATA, TCAS70_SCHEDULE_ITEMS } from '../data/tcas70Schedule';
 
 interface DashboardViewProps {
   onOpenCourseModal: (course?: Course) => void;
@@ -44,7 +48,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenRedeemModal,
 }) => {
   const { profile, user } = useAuth();
-  const { courses, materials, events, reorderCourses, toggleEventCompleted } = useData();
+  const { courses, materials, events, reorderCourses, toggleEventCompleted, tcasCompletedIds } = useData();
+
+  // TCAS Modal state
+  const [isTCASModalOpen, setIsTCASModalOpen] = useState(false);
 
   // Calendar State
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -199,6 +206,95 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="flex items-center gap-1 text-xs font-semibold text-blue-600 group-hover:translate-x-0.5 transition-transform self-end sm:self-auto">
           <span>เข้าสู่ชุมชน</span>
           <ArrowRight className="w-3.5 h-3.5" />
+        </div>
+      </div>
+
+      {/* Pinned TCAS70 Schedule Banner (Pinned for Everyone) */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-indigo-50 via-blue-50/70 to-purple-50/50 border border-blue-200 shadow-xs space-y-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
+              <Pin className="w-5 h-5 fill-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-extrabold text-sm sm:text-base text-slate-900">
+                  กำหนดการ TCAS70 (ปักหมุดสำหรับทุกคน ตามตาราง)
+                </h3>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                  Official
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 mt-0.5">
+                {TCAS70_METADATA.note} • อ้างอิงจาก ทปอ. & {TCAS70_METADATA.credit}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              onClick={() => setIsTCASModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-blue-700 font-bold text-xs border border-blue-200 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+            >
+              <Table className="w-3.5 h-3.5" />
+              <span>เปิดดูตารางฉบับเต็ม (34 รายการ)</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('calendar')}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span>ไปที่ปฏิทิน</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Highlighted Exam Countdown Badges */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+          <div 
+            onClick={() => setActiveTab('calendar')}
+            className="p-3 rounded-xl bg-white/90 border border-slate-200/80 hover:border-blue-300 transition-all cursor-pointer space-y-1 shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                วันสอบจริง
+              </span>
+              <span className="text-[11px] font-bold text-slate-600">30 ม.ค. - 1 ก.พ. 70</span>
+            </div>
+            <div className="font-bold text-xs text-slate-900 truncate">
+              สอบ TGAT / TPAT2 - 5
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setActiveTab('calendar')}
+            className="p-3 rounded-xl bg-white/90 border border-slate-200/80 hover:border-blue-300 transition-all cursor-pointer space-y-1 shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                วันสอบจริง
+              </span>
+              <span className="text-[11px] font-bold text-slate-600">13 ก.พ. 70</span>
+            </div>
+            <div className="font-bold text-xs text-slate-900 truncate">
+              สอบ TPAT1 กสพท
+            </div>
+          </div>
+
+          <div 
+            onClick={() => setActiveTab('calendar')}
+            className="p-3 rounded-xl bg-white/90 border border-slate-200/80 hover:border-blue-300 transition-all cursor-pointer space-y-1 shadow-2xs"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-red-100 text-red-700">
+                วันสอบจริง
+              </span>
+              <span className="text-[11px] font-bold text-slate-600">13 - 15 มี.ค. 70</span>
+            </div>
+            <div className="font-bold text-xs text-slate-900 truncate">
+              สอบ A-Level ทุกวิชา
+            </div>
+          </div>
         </div>
       </div>
 
@@ -623,6 +719,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* Full TCAS Schedule Table Modal */}
+      <TCASScheduleModal
+        isOpen={isTCASModalOpen}
+        onClose={() => setIsTCASModalOpen(false)}
+        onSelectDate={(targetDate) => {
+          setSelectedDateStr(targetDate);
+          setActiveTab('calendar');
+        }}
+        completedIds={tcasCompletedIds}
+        onToggleComplete={(id) => toggleEventCompleted(id, tcasCompletedIds.includes(id))}
+      />
     </div>
   );
 };

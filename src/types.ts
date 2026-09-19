@@ -69,12 +69,36 @@ export interface CalendarEvent {
   title: string;
   type: EventType;
   date: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
+  rawDateThai?: string; // e.g. "30 ม.ค. - 1 ก.พ. 70"
   time?: string; // HH:mm
   priority: PriorityLevel;
   isCompleted: boolean;
   notes?: string;
+  isPinned?: boolean; // Pinned for everyone
+  isOfficial?: boolean;
+  categoryTag?: string;
+  monthThai?: string;
+  isNew?: boolean;
+  isExamHighlight?: boolean;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface TCASScheduleItem {
+  id: string;
+  title: string;
+  monthThai: string; // e.g. "ก.ค. 69"
+  rawDateThai: string; // e.g. "ตั้งแต่ 15 ก.ค."
+  date: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD
+  roundCategory: 'myTCAS' | 'Portfolio' | 'TPAT1' | 'TGAT_TPAT' | 'A_Level' | 'Quota' | 'Admission' | 'Direct_Admission' | 'Score_Review';
+  roundName: string; // e.g. "รอบ 1 Portfolio", "TGAT / TPAT2-5", "A-Level"
+  type: EventType;
+  priority: PriorityLevel;
+  isExamHighlight?: boolean; // Highlighted in red in official table
+  isNew?: boolean; // marked (New) in table
+  notes?: string;
 }
 
 export type ActiveTab = 'dashboard' | 'courses' | 'materials' | 'calendar' | 'portfolio' | 'news' | 'profile';

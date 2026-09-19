@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useMemo } from 'react';
 import { 
   db, 
   collection, 
@@ -19,6 +19,7 @@ import { useAuth } from './AuthContext';
 import { Course, CourseMaterial, CalendarEvent, CommunityPost, PostComment, SharedItemPayload, PortfolioItem } from '../types';
 import { INITIAL_COMMUNITY_POSTS } from '../data/mockCommunity';
 import { INITIAL_PORTFOLIO_ITEMS } from '../data/mockPortfolio';
+import { convertTCASToCalendarEvents } from '../data/tcas70Schedule';
 
 export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
   if (!obj || typeof obj !== 'object') return {};
@@ -78,6 +79,12 @@ interface DataContextType {
   exportBackupData: () => string;
   importBackupData: (jsonData: string) => Promise<void>;
   syncWithCloud: () => Promise<void>;
+  pinnedTCASEvents: CalendarEvent[];
+  tcasCompletedIds: string[];
+  toggleTCASCompleted: (id: string) => void;
+  showPinnedTCAS: boolean;
+  setShowPinnedTCAS: (show: boolean) => void;
+  allEvents: CalendarEvent[];
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -216,6 +223,54 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fallbackActiveEvKey = 'lukmoo_last_active_events';
   const fallbackActivePortKey = 'lukmoo_last_active_portfolio';
 
+  // TCAS70 pinned schedule state (pinned for everyone)
+  const [tcasCompletedIds, setTcasCompletedIds] = useState<string[]>(() =>
+    getLocalData<string[]>('lukmoo_tcas_completed_ids', [])
+  );
+  const [hiddenTcasIds, setHiddenTcasIds] = useState<string[]>(() =>
+    getLocalData<string[]>('lukmoo_hidden_tcas_ids', [])
+  );
+  const [showPinnedTCAS, setShowPinnedTCAS] = useState<boolean>(() =>
+    getLocalData<boolean>('lukmoo_show_pinned_tcas', true)
+  );
+
+  const toggleTCASCompleted = (id: string) => {
+    setTcasCompletedIds(prev => {
+      const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      setLocalData('lukmoo_tcas_completed_ids', next);
+      return next;
+    });
+  };
+
+  const hideTCASEvent = (id: string) => {
+    setHiddenTcasIds(prev => {
+      const next = [...prev, id];
+      setLocalData('lukmoo_hidden_tcas_ids', next);
+      return next;
+    });
+  };
+
+  const handleSetShowPinnedTCAS = (show: boolean) => {
+    setShowPinnedTCAS(show);
+    setLocalData('lukmoo_show_pinned_tcas', show);
+  };
+
+  const pinnedTCASEvents = useMemo<CalendarEvent[]>(() => {
+    return convertTCASToCalendarEvents()
+      .filter(ev => !hiddenTcasIds.includes(ev.id))
+      .map(ev => ({
+        ...ev,
+        isCompleted: tcasCompletedIds.includes(ev.id),
+      }));
+  }, [tcasCompletedIds, hiddenTcasIds]);
+
+  const allEvents = useMemo<CalendarEvent[]>(() => {
+    if (showPinnedTCAS) {
+      return [...events, ...pinnedTCASEvents];
+    }
+    return events;
+  }, [events, pinnedTCASEvents, showPinnedTCAS]);
+
   // Timer refs for high-speed debounced Firestore batch writes
   const reorderCoursesTimerRef = useRef<any>(null);
   const reorderMaterialsTimerRef = useRef<any>(null);
@@ -223,6 +278,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lastLocalMaterialReorderTimeRef = useRef<number>(0);
 
   // Active real-time sync for community posts (visible to all users across the app)
+  const deletedPostIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
     let isMounted = true;
 
@@ -230,10 +287,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updatePostsSafely = (incoming: CommunityPost[]) => {
       setCommunityPosts(prev => {
         const map = new Map<string, CommunityPost>();
-        INITIAL_COMMUNITY_POSTS.forEach(p => map.set(p.id, p));
-        prev.forEach(p => map.set(p.id, p));
+        INITIAL_COMMUNITY_POSTS.forEach(p => {
+          if (!deletedPostIdsRef.current.has(p.id)) {
+            map.set(p.id, p);
+          }
+        });
+        prev.forEach(p => {
+          if (!deletedPostIdsRef.current.has(p.id)) {
+            map.set(p.id, p);
+          }
+        });
         incoming.forEach(p => {
-          if (p && p.id) {
+          if (p && p.id && !deletedPostIdsRef.current.has(p.id)) {
             map.set(p.id, { ...map.get(p.id), ...p });
           }
         });
@@ -982,6 +1047,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateEvent = async (id: string, data: Partial<CalendarEvent>) => {
+    if (id.startsWith('tcas70-')) {
+      if (data.isCompleted !== undefined) {
+        toggleTCASCompleted(id);
+      }
+      return;
+    }
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
@@ -1028,6 +1099,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteEvent = async (id: string) => {
+    if (id.startsWith('tcas70-')) {
+      hideTCASEvent(id);
+      return;
+    }
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     markIdsAsDeleted([id]);
@@ -1052,6 +1127,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const toggleEventCompleted = async (id: string, current: boolean) => {
+    if (id.startsWith('tcas70-')) {
+      toggleTCASCompleted(id);
+      return;
+    }
     await updateEvent(id, { isCompleted: !current });
   };
 
@@ -1094,12 +1173,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Persist to Express backend /api/community/posts (works 100% reliably for all students)
     try {
-      fetch('/api/community/posts', {
+      await fetch('/api/community/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newPost),
-      }).catch(err => console.warn('Server post error:', err));
-    } catch {}
+      });
+    } catch (err) {
+      console.warn('Server post error:', err);
+    }
 
     // 3. Persist to Firestore cloud in parallel
     try {
@@ -1194,6 +1275,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteCommunityPost = async (postId: string) => {
+    deletedPostIdsRef.current.add(postId);
     setCommunityPosts(prev => prev.filter(p => p.id !== postId));
 
     fetch(`/api/community/posts/${postId}`, {
@@ -1754,7 +1836,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider value={{
       courses,
       materials,
-      events,
+      events: allEvents,
       communityPosts,
       portfolioItems,
       isLoadingData,
@@ -1784,6 +1866,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       exportBackupData,
       importBackupData,
       syncWithCloud,
+      pinnedTCASEvents,
+      tcasCompletedIds,
+      toggleTCASCompleted,
+      showPinnedTCAS,
+      setShowPinnedTCAS: handleSetShowPinnedTCAS,
+      allEvents,
     }}>
       {children}
     </DataContext.Provider>

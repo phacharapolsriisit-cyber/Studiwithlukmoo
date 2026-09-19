@@ -397,6 +397,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoadingData(true);
     markSyncing();
 
+    // Refresh deleted IDs for the current user
+    const stored = getLocalData<string[]>(localDeletedKey, []);
+    deletedIdsRef.current = new Set(stored);
+
     // 1. Instantly hydrate from local storage so refreshing the page never flashes blank or reverts
     let localC = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
     if (localC.length === 0) {
@@ -483,6 +487,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLocalData('lukmoo_show_pinned_tcas', data.showPinnedTCAS);
           }
         }
+      }, (err) => {
+        console.warn('Profile sync notice:', err?.message);
       });
 
       const coursesRef = collection(db, 'users', user.uid, 'courses');
@@ -490,39 +496,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const list: Course[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!deletedIdsRef.current.has(docSnap.id) && !data._deleted && !data.isDeleted) {
+          if (!data._deleted && !data.isDeleted) {
             list.push({ id: docSnap.id, ...data } as Course);
           }
         });
 
-        // If local user reordered items within the last 2.5s, preserve the local orderIndex
-        const timeSinceLocalReorder = Date.now() - lastLocalCourseReorderTimeRef.current;
-        if (timeSinceLocalReorder < 2500) {
-          const currentLocal = getLocalData<Course[]>(localCourseKey, []);
-          const orderMap = new Map<string, number>(currentLocal.map((c, i) => [c.id, c.orderIndex ?? i]));
-          list.forEach((item) => {
-            const preservedOrder = orderMap.get(item.id);
-            if (preservedOrder !== undefined) {
-              item.orderIndex = preservedOrder;
-            }
-          });
-        }
-
-        // INTELLIGENT TIMESTAMP-AWARE MERGE:
-        // Combine locally cached courses with cloud snapshot
-        // so that newer local edits (e.g. newly added tutor name, course rename)
-        // are NEVER overwritten by older snapshots!
         const existingLocal = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
         const mergedCourseMap = new Map<string, Course>();
         
-        // Items in Cloud are base of truth
         list.forEach(cloudItem => {
           mergedCourseMap.set(cloudItem.id, cloudItem);
         });
 
-        // Check local items: if they are newer OR don't exist in cloud (newly added), preserve them.
-        // BUT if they exist in cloud and local is OLDER, cloud wins.
-        // IF they don't exist in cloud and local is OLD (>30s), assume deleted elsewhere.
         const now = Date.now();
         existingLocal.forEach(localItem => {
           const cloudItem = mergedCourseMap.get(localItem.id);
@@ -531,11 +516,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (cloudItem) {
             const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
             if (localUpdatedTime > cloudUpdatedTime) {
-              // Local is strictly newer! Preserve local modifications
               mergedCourseMap.set(localItem.id, { ...cloudItem, ...localItem });
             }
           } else {
-            // IF they don't exist in cloud and local is OLD (>5 mins), assume deleted elsewhere.
             const isVeryNew = (now - localUpdatedTime) < 300000;
             if (isVeryNew) {
               mergedCourseMap.set(localItem.id, localItem);
@@ -556,10 +539,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markSynced();
         setIsLoadingData(false);
       }, (err) => {
-        console.warn('Courses listener notice, using cached local data:', err?.message);
+        console.warn('Courses sync notice:', err?.message);
         markSyncError();
-        const cached = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
-        setCourses(cached);
         setIsLoadingData(false);
       });
 
@@ -568,25 +549,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const list: CourseMaterial[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!deletedIdsRef.current.has(docSnap.id) && !data._deleted && !data.isDeleted) {
+          if (!data._deleted && !data.isDeleted) {
             list.push({ id: docSnap.id, ...data } as CourseMaterial);
           }
         });
 
-        // Preserve local orderIndex if user just reordered
-        const timeSinceLocalReorder = Date.now() - lastLocalMaterialReorderTimeRef.current;
-        if (timeSinceLocalReorder < 2500) {
-          const currentLocal = getLocalData<CourseMaterial[]>(localMatKey, []);
-          const orderMap = new Map<string, number>(currentLocal.map((m, i) => [m.id, m.orderIndex ?? i]));
-          list.forEach((item) => {
-            const preservedOrder = orderMap.get(item.id);
-            if (preservedOrder !== undefined) {
-              item.orderIndex = preservedOrder;
-            }
-          });
-        }
-
-        // Intelligent timestamp-aware merge for materials
         const existingLocal = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
         const mergedMatMap = new Map<string, CourseMaterial>();
         
@@ -624,10 +591,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLocalData(fallbackActiveMatKey, finalMaterials);
         markSynced();
       }, (err) => {
-        console.warn('Materials listener notice, using cached local data:', err?.message);
+        console.warn('Materials sync notice:', err?.message);
         markSyncError();
-        const cached = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
-        setMaterials(cached);
       });
 
       const eventsRef = collection(db, 'users', user.uid, 'events');
@@ -635,12 +600,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const list: CalendarEvent[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!deletedIdsRef.current.has(docSnap.id) && !data._deleted && !data.isDeleted) {
+          if (!data._deleted && !data.isDeleted) {
             list.push({ id: docSnap.id, ...data } as CalendarEvent);
           }
         });
 
-        // Intelligent timestamp-aware merge for events
         const existingLocal = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
         const mergedEvMap = new Map<string, CalendarEvent>();
         
@@ -674,10 +638,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLocalData(fallbackActiveEvKey, finalEvents);
         markSynced();
       }, (err) => {
-        console.warn('Events listener notice, using cached local data:', err?.message);
+        console.warn('Events sync notice:', err?.message);
         markSyncError();
-        const cached = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
-        setEvents(cached);
       });
 
       const portRef = collection(db, 'users', user.uid, 'portfolio_items');
@@ -723,12 +685,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const cached = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
         setPortfolioItems(cached);
       });
-    } catch {
-      // Offline fallback
-      setCourses(getLocalData<Course[]>(localCourseKey, []));
-      setMaterials(getLocalData<CourseMaterial[]>(localMatKey, []));
-      setEvents(getLocalData<CalendarEvent[]>(localEvKey, []));
-      setPortfolioItems(getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS));
+    } catch (e) {
+      console.warn('Cloud listeners initialization failed:', e);
       setIsLoadingData(false);
     }
 
@@ -893,30 +851,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nowIso = new Date().toISOString();
     const reindexed = newOrderedList.map((c, idx) => ({ ...c, orderIndex: idx, updatedAt: nowIso }));
     
-    // 1. Instant local state & localStorage update for 0ms lag
+    // 1. Instant local update
     setCourses(reindexed);
     setLocalData(localCourseKey, reindexed);
     setLocalData(fallbackActiveCourseKey, reindexed);
 
-    // 2. Debounced batch commit to Firestore with atomic set merge
+    // 2. Debounced batch commit
     if (!user.isDemo) {
-      if (reorderCoursesTimerRef.current) {
-        clearTimeout(reorderCoursesTimerRef.current);
-      }
+      if (reorderCoursesTimerRef.current) clearTimeout(reorderCoursesTimerRef.current);
       reorderCoursesTimerRef.current = setTimeout(async () => {
         try {
           markSyncing();
           const batch = writeBatch(db);
           reindexed.forEach((course) => {
             const ref = doc(db, 'users', user.uid, 'courses', course.id);
-            batch.set(ref, { orderIndex: course.orderIndex, updatedAt: course.updatedAt }, { merge: true });
+            batch.set(ref, sanitizeForFirestore(course), { merge: true });
           });
           await batch.commit();
           markSynced();
         } catch (err) {
-          console.warn('Notice reordering courses in Firestore:', err);
+          console.warn('Reorder sync error:', err);
+          markSyncError();
         }
-      }, 180);
+      }, 2000);
     }
   };
 

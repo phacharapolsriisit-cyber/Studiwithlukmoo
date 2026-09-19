@@ -364,8 +364,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
 
-        setCourses(cloudCourses);
-        setLocalData(courseCacheKey, cloudCourses);
+        setCourses(prev => {
+          const cloudIds = new Set(cloudCourses.map(c => c.id));
+          const localOnly = prev.filter(c => !cloudIds.has(c.id));
+          const merged = [...cloudCourses, ...localOnly];
+          setLocalData(courseCacheKey, merged);
+          return merged;
+        });
         markSynced();
         setIsLoadingData(false);
       }, (err) => {
@@ -391,8 +396,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
 
-        setMaterials(cloudMats);
-        setLocalData(matCacheKey, cloudMats);
+        setMaterials(prev => {
+          const cloudIds = new Set(cloudMats.map(m => m.id));
+          const localOnly = prev.filter(m => !cloudIds.has(m.id));
+          const merged = [...cloudMats, ...localOnly];
+          setLocalData(matCacheKey, merged);
+          return merged;
+        });
         markSynced();
       }, (err) => {
         if (!isQuotaError(err)) console.warn('Materials sync listener notice:', err?.message);
@@ -412,8 +422,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         cloudEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-        setEvents(cloudEvents);
-        setLocalData(evCacheKey, cloudEvents);
+        setEvents(prev => {
+          const cloudIds = new Set(cloudEvents.map(e => e.id));
+          const localOnly = prev.filter(e => !cloudIds.has(e.id));
+          const merged = [...cloudEvents, ...localOnly];
+          setLocalData(evCacheKey, merged);
+          return merged;
+        });
         markSynced();
       }, (err) => {
         if (!isQuotaError(err)) console.warn('Events sync listener notice:', err?.message);
@@ -433,8 +448,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         cloudPort.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
-        setPortfolioItems(cloudPort);
-        setLocalData(portCacheKey, cloudPort);
+        setPortfolioItems(prev => {
+          const cloudIds = new Set(cloudPort.map(p => p.id));
+          const localOnly = prev.filter(p => !cloudIds.has(p.id));
+          const merged = [...cloudPort, ...localOnly];
+          setLocalData(portCacheKey, merged);
+          return merged;
+        });
         markSynced();
       }, (err) => {
         if (!isQuotaError(err)) console.warn('Portfolio sync listener notice:', err?.message);
@@ -453,7 +473,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubPortfolio();
       unsubProfile();
     };
-  }, [user]);
+  }, [user?.uid, user?.isDemo]);
 
   // ----------------------------------------------------
   // Community Feed Sync

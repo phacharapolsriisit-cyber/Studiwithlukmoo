@@ -194,8 +194,11 @@ const AppContent: React.FC = () => {
   const handleSaveCourse = async (courseData: Omit<Course, 'id' | 'createdAt' | 'orderIndex'>) => {
     if (editingCourse) {
       await updateCourse(editingCourse.id, courseData);
+      setImportedToast(`อัปเดตวิชา "${courseData.title}" เรียบร้อยแล้ว`);
     } else {
       await addCourse(courseData);
+      setImportedToast(`เพิ่มวิชา "${courseData.title}" สำเร็จแล้ว!`);
+      setActiveTab('courses');
     }
   };
 

@@ -8,11 +8,12 @@ import {
   Sparkles, 
   Send,
   CheckCircle2,
-  Link as LinkIcon,
   Copy,
   Lock,
   Globe2,
-  Tag
+  Tag,
+  KeyRound,
+  ArrowRight
 } from 'lucide-react';
 import { Course, CourseMaterial, SharedItemPayload } from '../types';
 import { useData } from '../context/DataContext';
@@ -40,9 +41,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [freeTagInput, setFreeTagInput] = useState('Dek68, แชร์วิชาเรียน');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successNotice, setSuccessNotice] = useState(false);
-  const [privateLink, setPrivateLink] = useState('');
   const [shareCode, setShareCode] = useState('');
-  const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [privateNote, setPrivateNote] = useState('');
 
@@ -89,12 +88,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   useEffect(() => {
     if (isOpen && targetItem) {
-      // Automatically prepare private share link and short code instantly
+      // Automatically generate 6-character short share code instantly
       createPrivateShareLink(targetItem, privateNote).then((res) => {
-        setPrivateLink(res.url);
         setShareCode(res.shareCode);
       });
-      setCopiedLink(false);
       setCopiedCode(false);
       setSuccessNotice(false);
       setContent('');
@@ -109,28 +106,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       await navigator.clipboard.writeText(shareCode);
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 3000);
-    } catch {}
-  };
-
-  const handleCopyPrivateLink = async () => {
-    if (!targetItem) return;
-    try {
-      let linkToCopy = privateLink;
-      if (!linkToCopy) {
-        const res = await createPrivateShareLink(targetItem, privateNote);
-        setPrivateLink(res.url);
-        setShareCode(res.shareCode);
-        linkToCopy = res.url;
-      }
-      await navigator.clipboard.writeText(linkToCopy);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 3000);
     } catch {
-      if (privateLink) {
-        navigator.clipboard.writeText(privateLink);
-        setCopiedLink(true);
-        setTimeout(() => setCopiedLink(false), 3000);
-      }
+      // Fallback
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 3000);
     }
   };
 
@@ -140,8 +119,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     try {
       setIsSubmitting(true);
       const postText = content.trim() || (isCourse 
-        ? `แชร์คอร์สติว "${course?.title || ''}" ให้เพื่อนๆ สามารถกดบันทึกเข้าคลังวิชาไปทบทวนได้เลยครับ!`
-        : `แชร์เอกสาร/คลิป "${material?.title || ''}" จากวิชา ${courseOfMaterial?.title || ''} กดบันทึกไปอ่านได้เลยครับ!`
+        ? `แชร์คอร์สติว "${course?.title || ''}" ให้เพื่อนๆ ทุกคนในชุมชน สามารถกดบันทึกเข้าคลังวิชาไปทบทวนได้เลยครับ!`
+        : `แชร์เอกสาร/คลิป "${material?.title || ''}" จากวิชา ${courseOfMaterial?.title || ''} ทุกคนสามารถกดบันทึกไปอ่านได้เลยครับ!`
       );
       
       // Parse free text tags (split by comma or spaces, ensure clean tags)
@@ -185,7 +164,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 {isCourse ? 'แชร์วิชาเรียน' : 'แชร์ไฟล์ / วิดีโอ'}
               </h2>
               <p className="text-xs text-slate-500">
-                เลือกสร้างลิงก์ส่วนตัว หรือแชร์ลงกระดานชุมชนสาธารณะ
+                เลือกรหัสแชร์ 6 หลัก หรือโพสต์ลงกระดานชุมชนที่เห็นทุกคน
               </p>
             </div>
           </div>
@@ -197,7 +176,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </button>
         </div>
 
-        {/* Mode Selector Tabs (Private Link vs Public Community) */}
+        {/* Mode Selector Tabs (Private Code vs Public Community) */}
         <div className="p-3 bg-slate-50 border-b border-slate-100 flex gap-2">
           <button
             type="button"
@@ -208,8 +187,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 : 'text-slate-600 hover:bg-slate-200/60'
             }`}
           >
-            <Lock className="w-3.5 h-3.5 text-blue-600" />
-            <span>สร้างลิงก์ส่วนตัว (Private Link)</span>
+            <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+            <span>รหัสแชร์ 6 หลัก (Share Code)</span>
           </button>
 
           <button
@@ -222,7 +201,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             }`}
           >
             <Globe2 className="w-3.5 h-3.5 text-blue-600" />
-            <span>โพสต์ลงชุมชนสาธารณะ</span>
+            <span>โพสต์ลงชุมชน (ทุกคนเห็น)</span>
           </button>
         </div>
 
@@ -268,120 +247,83 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </div>
         </div>
 
-        {/* Tab 1: Private Sharing Link (ความเป็นส่วนตัว ไม่ลงชุมชน) */}
+        {/* Tab 1: Share Code Only (ไม่มีการสร้างลิงก์ ใช้โค้ดเพียวๆ) */}
         {shareMode === 'private' && (
           <div className="p-5 space-y-4">
             <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-1">
               <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
-                <Lock className="w-3.5 h-3.5 text-blue-600" />
-                <span>แชร์แบบส่วนตัว (Private Direct Code & Link)</span>
+                <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+                <span>รหัสแชร์ 6 หลัก (ส่งโค้ดให้เพื่อนใช้งานได้ทันที)</span>
               </div>
-              <p className="text-xs text-slate-600">
-                ข้อมูลจะไม่แสดงบนหน้าบอร์ดชุมชนสาธารณะ เพื่อนที่ได้รับรหัสหรือลิงก์นี้เท่านั้นที่จะสามารถกดรับและบันทึกเข้าคลังวิชาได้ทันที
+              <p className="text-xs text-slate-600 leading-relaxed">
+                คัดลอกรหัสนี้ส่งให้เพื่อนในแชท โดยเพื่อนสามารถนำไปกรอกที่ปุ่ม <strong>"ใส่โค้ดรับคอร์ส"</strong> เพื่อรับวิชาหรือเอกสารทั้งหมดเข้าสู่ระบบทันที
               </p>
             </div>
 
-            {/* Option A: 6-Character Short Share Code */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  รหัสแชร์ 6 หลัก (ส่งโค้ดให้เพื่อนกรอกได้เลย)
-                </span>
-                <span className="text-[10px] text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
-                  สั้น กระชับ จำง่าย
-                </span>
+            {/* Prominent Share Code Card */}
+            <div className="p-5 rounded-2xl bg-gradient-to-b from-slate-50 to-slate-100/70 border border-slate-200 space-y-3 text-center">
+              <div className="text-xs font-bold text-slate-600 flex items-center justify-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                <span>รหัสแชร์ของคุณ</span>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-white border-2 border-blue-200 rounded-xl py-2 px-3 flex items-center justify-center tracking-widest font-mono text-base sm:text-lg font-black text-blue-700 select-all shadow-2xs">
-                  {shareCode || 'LM-....'}
-                </div>
+              {/* Big Monospace Code Display */}
+              <div className="bg-white border-2 border-blue-400/80 rounded-2xl py-3.5 px-6 tracking-[0.25em] font-mono text-2xl sm:text-3xl font-black text-blue-700 shadow-sm select-all inline-block">
+                {shareCode || 'LM-....'}
+              </div>
+
+              {/* Copy Code Button */}
+              <div>
                 <button
                   type="button"
                   onClick={handleCopyCode}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                  className={`w-full py-3 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm ${
                     copiedCode
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white active:scale-[0.99]'
                   }`}
                 >
                   {copiedCode ? (
                     <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>คัดลอกโค้ดแล้ว!</span>
+                      <CheckCircle2 className="w-5 h-5" />
+                      <span>คัดลอกรหัสแชร์แล้ว! พร้อมส่งให้เพื่อน</span>
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4" />
-                      <span>คัดลอกโค้ด</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              <p className="text-[11px] text-slate-500">
-                เพื่อนสามารถกดปุ่ม <strong>"ใส่โค้ดรับคอร์ส"</strong> บนหน้าเว็บแล้วพิมพ์รหัสนี้ได้ทันที
-              </p>
-            </div>
-
-            {/* Option B: Short Direct URL */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                หรือส่งเป็นลิงก์สั้น (Short URL)
-              </label>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <LinkIcon className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    readOnly
-                    value={privateLink || 'กำลังสร้างลิงก์...'}
-                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 bg-slate-50 select-all font-mono"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyPrivateLink}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                    copiedLink
-                      ? 'bg-emerald-600 text-white'
-                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
-                  }`}
-                >
-                  {copiedLink ? (
-                    <>
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>คัดลอกแล้ว!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" />
-                      <span>คัดลอกลิงก์</span>
+                      <Copy className="w-5 h-5" />
+                      <span>คัดลอกรหัสแชร์ ({shareCode || 'LM-....'})</span>
                     </>
                   )}
                 </button>
               </div>
             </div>
 
+            {/* Step-by-step Guide */}
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 space-y-2 text-xs text-slate-600">
+              <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                <ArrowRight className="w-3.5 h-3.5 text-blue-600" />
+                วิธีให้เพื่อนใช้งานโค้ดนี้:
+              </span>
+              <ol className="list-decimal list-inside space-y-1 text-[11px] text-slate-600 pl-1 leading-relaxed">
+                <li>ส่งรหัส 6 หลักนี้ให้เพื่อนทาง Line, Messenger หรือ Discord</li>
+                <li>บอกให้เพื่อนกดปุ่ม <strong>"ใส่โค้ดรับคอร์ส"</strong> หรือ <strong>"กรอกรหัสรับชีท"</strong> บนแถบเมนู</li>
+                <li>วางรหัสนี้ลงไป ระบบจะนำเข้าเนื้อหาเข้าคลังของเพื่อนอัตโนมัติทันที</li>
+              </ol>
+            </div>
+
+            {/* Optional Note */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 ข้อความโน้ตสั้นๆ แนบไปด้วย (ถ้ามี)
               </label>
               <input
                 type="text"
-                placeholder="เช่น การบ้านบทที่ 3, สรุปฟิสิกส์สำหรับสอบปลายภาค..."
+                placeholder="เช่น สรุปฟิสิกส์เตรียมสอบปลายภาค, การบ้านบทที่ 2..."
                 value={privateNote}
                 onChange={(e) => setPrivateNote(e.target.value)}
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
               />
             </div>
-
-            {(copiedLink || copiedCode) && (
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>คัดลอกเรียบร้อยแล้ว ส่งให้เพื่อนทาง Line, Messenger หรือ Discord ได้เลย!</span>
-              </div>
-            )}
 
             <div className="pt-2 flex justify-end">
               <button
@@ -395,7 +337,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </div>
         )}
 
-        {/* Tab 2: Public Community Posting with Free-Text Tags */}
+        {/* Tab 2: Public Community Posting (เห็นทุกคนที่ใช้เว็บ) */}
         {shareMode === 'community' && (
           <div>
             {successNotice ? (
@@ -403,15 +345,22 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto animate-bounce">
                   <CheckCircle2 className="w-8 h-8" />
                 </div>
-                <h3 className="font-bold text-slate-900 text-lg">แชร์ไปยังหน้าชุมชนสำเร็จ!</h3>
-                <p className="text-xs text-slate-500">กำลังนำทางไปยังหน้ากระดานข่าวสารและชุมชน...</p>
+                <h3 className="font-bold text-slate-900 text-lg">โพสต์ลงชุมชนสำเร็จแล้ว!</h3>
+                <p className="text-xs text-slate-500">ทุกคนที่ใช้ระบบสามารถเห็นโพสต์และกดบันทึกเนื้อหาได้ทันที</p>
               </div>
             ) : (
               <form onSubmit={handleCommunityShare} className="p-5 space-y-4">
+                <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 text-xs text-blue-900 flex items-start gap-2">
+                  <Globe2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>บอร์ดชุมชนสาธารณะ:</strong> เมื่อคุณโพสต์ ทุกคนที่ใช้งานเว็บไซต์ Lukmoo Tutor จะสามารถมองเห็นและกดบันทึกวิชาหรือชีทของคุณได้ทันทีแบบเรียลไทม์
+                  </span>
+                </div>
+
                 {/* Content Input */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    ข้อความแนะนำ หรือคำอธิบายเพิ่มเติมถึงเพื่อนๆ
+                    ข้อความแนะนำ หรือคำอธิบายถึงเพื่อนๆ
                   </label>
                   <textarea
                     value={content}
@@ -426,7 +375,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   />
                 </div>
 
-                {/* Free Text Tag Input (Removed rigid # selector) */}
+                {/* Free Text Tag Input */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
                     <Tag className="w-3.5 h-3.5 text-blue-600" />
@@ -440,7 +389,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
-                    * ไม่จำกัดเฉพาะ # ที่กำหนดไว้ สามารถพิมพ์คำค้นหรือหัวข้อที่ต้องการได้อิสระ
+                    * พิมพ์หัวข้อหรือวิชาที่ต้องการให้เพื่อนค้นหาเจอได้ง่ายๆ
                   </p>
                 </div>
 
@@ -457,10 +406,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>{isSubmitting ? 'กำลังโพสต์...' : 'โพสต์ลงหน้าชุมชน'}</span>
+                    <span>{isSubmitting ? 'กำลังโพสต์...' : 'โพสต์ลงชุมชน (ทุกคนเห็น)'}</span>
                   </button>
                 </div>
               </form>
@@ -471,3 +420,4 @@ export const ShareModal: React.FC<ShareModalProps> = ({
     </div>
   );
 };
+

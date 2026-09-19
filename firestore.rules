@@ -36,18 +36,16 @@ service cloud.firestore {
       }
     }
 
-    // Community posts & shared courses/materials
+    // Community posts & shared courses/materials (visible to everyone who uses the app)
     match /community_posts/{postId} {
       allow read: if true;
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow create, update: if true;
       allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
     }
 
-    // Private shared links
+    // Private shared codes
     match /shared_links/{linkId} {
-      allow read: if true;
-      allow create: if isAuthenticated();
+      allow read, create: if true;
       allow update, delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
     }
   }

@@ -126,6 +126,45 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const lastLocalCourseReorderTimeRef = useRef<number>(0);
   const lastLocalMaterialReorderTimeRef = useRef<number>(0);
 
+  // Active real-time Firestore listener for community posts (visible to all users across the app)
+  useEffect(() => {
+    let unsubCommunity: () => void = () => {};
+    try {
+      const postsRef = collection(db, 'community_posts');
+      unsubCommunity = onSnapshot(postsRef, (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudPosts: CommunityPost[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data && data.content) {
+              cloudPosts.push({ id: docSnap.id, ...data } as CommunityPost);
+            }
+          });
+
+          if (cloudPosts.length > 0) {
+            // Sort newest first
+            cloudPosts.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+            setCommunityPosts(cloudPosts);
+            setLocalData('lukmoo_community_posts', cloudPosts);
+            return;
+          }
+        }
+
+        // If Firestore collection is empty, load initial community posts
+        const local = getLocalData<CommunityPost[]>('lukmoo_community_posts', INITIAL_COMMUNITY_POSTS);
+        setCommunityPosts(local);
+      }, (error) => {
+        console.warn('Community posts onSnapshot warning:', error);
+      });
+    } catch (err) {
+      console.warn('Failed to listen to community_posts collection:', err);
+    }
+
+    return () => {
+      unsubCommunity();
+    };
+  }, []);
+
   // Synchronize community posts to local storage whenever updated
   useEffect(() => {
     setLocalData('lukmoo_community_posts', communityPosts);
@@ -655,10 +694,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sharedItem?: SharedItemPayload
   ): Promise<string> => {
     const newId = `post-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    
+    // Sanitize sharedItem to keep it lightweight (<200KB)
+    const cleanSharedItem = sharedItem ? {
+      ...sharedItem,
+      materials: sharedItem.materials?.map(m => ({
+        ...m,
+        fileData: m.fileData && m.fileData.length < 200000 ? m.fileData : undefined,
+      }))
+    } : undefined;
+
     const newPost: CommunityPost = {
       id: newId,
       authorId: user?.uid || 'guest-user',
-      authorName: profile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'นักเรียนติว',
+      authorName: profile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'เพื่อนนักเรียน Dek68',
       authorAvatar: user?.photoURL || undefined,
       authorTag: profile?.targetExam || 'Dek68',
       content: content.trim(),
@@ -667,19 +716,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       likes: 0,
       likedBy: [],
       comments: [],
-      sharedItem: sharedItem || undefined,
+      sharedItem: cleanSharedItem,
       createdAt: new Date().toISOString(),
     };
 
+    // 1. Immediately display locally (0ms)
     setCommunityPosts(prev => [newPost, ...prev]);
 
-    // Try persisting to Firestore if online
-    if (user && !user.isDemo) {
-      try {
-        await setDoc(doc(db, 'community_posts', newId), newPost);
-      } catch (err) {
-        console.warn('Could not sync post to Firestore cloud, stored locally:', err);
-      }
+    // 2. Persist to Firestore cloud unconditionally so EVERY user across the app sees it in real time!
+    try {
+      const sanitized = sanitizeForFirestore(newPost);
+      await setDoc(doc(db, 'community_posts', newId), sanitized);
+    } catch (err) {
+      console.warn('Could not sync post to Firestore cloud:', err);
     }
 
     return newId;
@@ -687,34 +736,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const likeCommunityPost = async (postId: string) => {
     const currentUid = user?.uid || 'guest-user';
+    let updatedLikedBy: string[] = [];
+    let updatedLikes = 0;
+
     setCommunityPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
       const hasLiked = p.likedBy.includes(currentUid);
-      const updatedLikedBy = hasLiked 
+      updatedLikedBy = hasLiked 
         ? p.likedBy.filter(uid => uid !== currentUid)
         : [...p.likedBy, currentUid];
+      updatedLikes = updatedLikedBy.length;
       return {
         ...p,
         likedBy: updatedLikedBy,
-        likes: updatedLikedBy.length
+        likes: updatedLikes
       };
     }));
 
-    // Sync to Firestore if authenticated
-    if (user && !user.isDemo) {
-      try {
-        const targetPost = communityPosts.find(p => p.id === postId);
-        if (targetPost) {
-          const hasLiked = targetPost.likedBy.includes(currentUid);
-          const updatedLikedBy = hasLiked 
-            ? targetPost.likedBy.filter(uid => uid !== currentUid)
-            : [...targetPost.likedBy, currentUid];
-          await updateDoc(doc(db, 'community_posts', postId), {
-            likedBy: updatedLikedBy,
-            likes: updatedLikedBy.length
-          });
-        }
-      } catch {}
+    // Sync to Firestore so all users see the updated likes
+    try {
+      await updateDoc(doc(db, 'community_posts', postId), {
+        likedBy: updatedLikedBy,
+        likes: updatedLikes
+      });
+    } catch (err) {
+      console.warn('Firestore like update warning:', err);
     }
   };
 
@@ -725,38 +771,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: commentId,
       postId,
       authorId: user?.uid || 'guest-user',
-      authorName: profile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'นักเรียนติว',
+      authorName: profile?.displayName || user?.displayName || user?.email?.split('@')[0] || 'เพื่อนนักเรียน Dek68',
       authorAvatar: user?.photoURL || undefined,
       content: content.trim(),
       createdAt: new Date().toISOString(),
     };
 
+    let updatedComments: PostComment[] = [];
+
     setCommunityPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
+      updatedComments = [...(p.comments || []), newComment];
       return {
         ...p,
-        comments: [...p.comments, newComment]
+        comments: updatedComments
       };
     }));
 
-    if (user && !user.isDemo) {
-      try {
-        const targetPost = communityPosts.find(p => p.id === postId);
-        if (targetPost) {
-          await updateDoc(doc(db, 'community_posts', postId), {
-            comments: [...targetPost.comments, newComment]
-          });
-        }
-      } catch {}
+    // Sync to Firestore so all users see the comment
+    try {
+      const sanitizedComments = updatedComments.map(c => sanitizeForFirestore(c));
+      await updateDoc(doc(db, 'community_posts', postId), {
+        comments: sanitizedComments
+      });
+    } catch (err) {
+      console.warn('Firestore comment update warning:', err);
     }
   };
 
   const deleteCommunityPost = async (postId: string) => {
     setCommunityPosts(prev => prev.filter(p => p.id !== postId));
-    if (user && !user.isDemo) {
-      try {
-        await deleteDoc(doc(db, 'community_posts', postId));
-      } catch {}
+    try {
+      await deleteDoc(doc(db, 'community_posts', postId));
+    } catch (err) {
+      console.warn('Firestore delete post warning:', err);
     }
   };
 
@@ -952,16 +1000,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localShares[shareId] = record;
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore asynchronously in background without blocking UI/link generation
-    if (user && !user.isDemo) {
-      const sanitized = sanitizeForFirestore(record);
-      Promise.all([
-        setDoc(doc(db, 'shared_links', cleanCode), sanitized),
-        setDoc(doc(db, 'shared_links', shareCode), sanitized),
-      ]).catch((e) => {
-        console.warn('Firestore shared_links background save warning:', e);
-      });
-    }
+    // 2. Persist to Firestore asynchronously in background so anyone can redeem this code
+    const sanitized = sanitizeForFirestore(record);
+    Promise.all([
+      setDoc(doc(db, 'shared_links', cleanCode), sanitized),
+      setDoc(doc(db, 'shared_links', shareCode), sanitized),
+      setDoc(doc(db, 'shared_links', shareId), sanitized),
+    ]).catch((e) => {
+      console.warn('Firestore shared_links background save warning:', e);
+    });
 
     const baseUrl = window.location.origin + window.location.pathname;
     const shareUrl = `${baseUrl}?code=${shareCode}`;

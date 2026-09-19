@@ -311,11 +311,14 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 </div>
               )}
               <div>
-                <h3 className="font-bold text-slate-900 text-sm">
-                  พูดคุย ถามข้อสอบ หรือแชร์ชีท/คลิปให้เพื่อนๆ
+                <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                  <span>พูดคุย ถามข้อสอบ หรือแชร์ชีท/คลิป</span>
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    ทุกคนที่ใช้เว็บจะมองเห็นร่วมกัน
+                  </span>
                 </h3>
                 <p className="text-xs text-slate-400">
-                  โพสต์ข้อความ แนบรูปภาพ หรือแนบวิชา/ชีทเพื่อแบ่งปันในชุมชน
+                  โพสต์ข้อความ รูปภาพ หรือแบ่งปันชีทสรุป — ผู้ใช้งานทุกคนที่เปิดเว็บไซต์จะเห็นและสามารถเข้ามาอ่าน บันทึก หรือคอมเมนต์ได้ทันที
                 </p>
               </div>
             </div>

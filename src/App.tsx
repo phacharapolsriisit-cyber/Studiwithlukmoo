@@ -15,6 +15,7 @@ import { ProfileModal } from './components/ProfileModal';
 import { NewsCommunityView } from './components/NewsCommunityView';
 import { PortfolioView } from './components/PortfolioView';
 import { ShareModal } from './components/ShareModal';
+import { RedeemShareCodeModal } from './components/RedeemShareCodeModal';
 import { UnauthenticatedView } from './components/UnauthenticatedView';
 import { ActiveTab, Course, CourseMaterial, CalendarEvent, SharedItemPayload } from './types';
 import { Cloud, Loader2, Download, CheckCircle2, X } from 'lucide-react';
@@ -48,6 +49,7 @@ const AppContent: React.FC = () => {
   // Modals state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isRedeemModalOpen, setIsRedeemModalOpen] = useState(false);
 
   const [isCourseModalOpen, setIsCourseModalOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -67,6 +69,14 @@ const AppContent: React.FC = () => {
   } | null>(null);
   const [isImportingShared, setIsImportingShared] = useState(false);
   const [importedToast, setImportedToast] = useState<string | null>(null);
+
+  // Toast auto-dismiss
+  useEffect(() => {
+    if (importedToast) {
+      const timer = setTimeout(() => setImportedToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [importedToast]);
 
   const [youtubePlayer, setYoutubePlayer] = useState<{
     isOpen: boolean;
@@ -103,10 +113,10 @@ const AppContent: React.FC = () => {
   }, [user, authLoading]);
 
   // Requirement: "ส่วนแชร์วิชาเรียนขอมีการใส่ลิ้งค์เพิ่มแทนการลงชุมชนด้วยเผื่อต้องการแบบความเป็นส่วนตัว"
-  // Detect incoming private share link (?share_code=... or ?share_id=...)
+  // Detect incoming private share link (?code=... or ?share_code=... or ?c=... or ?share_id=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const shareCode = params.get('share_code');
+    const shareCode = params.get('code') || params.get('c') || params.get('share_code');
     const shareId = params.get('share_id');
     if (shareCode || shareId) {
       resolvePrivateShare(shareCode || undefined, shareId || undefined).then((item) => {
@@ -282,6 +292,7 @@ const AppContent: React.FC = () => {
                 onOpenYouTubePlayer={handleOpenYouTubePlayer}
                 setActiveTab={setActiveTab}
                 onSelectCourseMaterials={handleSelectCourseMaterials}
+                onOpenRedeemModal={() => setIsRedeemModalOpen(true)}
               />
             )}
 
@@ -296,6 +307,7 @@ const AppContent: React.FC = () => {
                 onDeleteCourse={deleteCourse}
                 onReorderCourses={reorderCourses}
                 onShareCourse={handleShareCourse}
+                onOpenRedeemModal={() => setIsRedeemModalOpen(true)}
               />
             )}
 
@@ -504,6 +516,16 @@ const AppContent: React.FC = () => {
       <ProfileModal
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+      />
+
+      {/* Redeem Share Code Modal */}
+      <RedeemShareCodeModal
+        isOpen={isRedeemModalOpen}
+        onClose={() => setIsRedeemModalOpen(false)}
+        onSuccess={(courseId) => {
+          setImportedToast('นำเข้าคอร์สติวเรียบร้อยแล้ว!');
+          setActiveTab('courses');
+        }}
       />
     </div>
   );

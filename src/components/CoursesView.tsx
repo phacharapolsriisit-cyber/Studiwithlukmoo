@@ -13,7 +13,8 @@ import {
   Filter,
   ExternalLink,
   Share2,
-  CheckCircle2
+  CheckCircle2,
+  Key
 } from 'lucide-react';
 import { Course, CourseMaterial, CalendarEvent, SubjectCategory } from '../types';
 import { CATEGORIES } from '../utils/categories';
@@ -28,6 +29,7 @@ interface CoursesViewProps {
   onDeleteCourse: (id: string) => void;
   onReorderCourses: (courses: Course[]) => void;
   onShareCourse?: (course: Course) => void;
+  onOpenRedeemModal?: () => void;
 }
 
 export const CoursesView: React.FC<CoursesViewProps> = ({
@@ -40,6 +42,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
   onDeleteCourse,
   onReorderCourses,
   onShareCourse,
+  onOpenRedeemModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -89,14 +92,27 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
           </p>
         </div>
 
-        <button
-          id="add-course-main-btn"
-          onClick={() => onOpenCourseModal()}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-xs transition-colors cursor-pointer"
-        >
-          <Plus className="w-4 h-4" />
-          <span>เพิ่มคอร์สติว / วิชาใหม่</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenRedeemModal && (
+            <button
+              id="redeem-course-btn"
+              onClick={onOpenRedeemModal}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 font-semibold text-xs sm:text-sm transition-colors cursor-pointer shadow-2xs"
+              title="กรอกโค้ด 6 หลักที่เพื่อนส่งให้เพื่อรับคอร์สติว"
+            >
+              <Key className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>ใส่โค้ดรับคอร์ส</span>
+            </button>
+          )}
+          <button
+            id="add-course-main-btn"
+            onClick={() => onOpenCourseModal()}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs sm:text-sm shadow-xs transition-colors cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>เพิ่มคอร์สติว / วิชาใหม่</span>
+          </button>
+        </div>
       </div>
 
       {/* Search & Filter bar */}

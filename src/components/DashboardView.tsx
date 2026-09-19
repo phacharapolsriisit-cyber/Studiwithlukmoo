@@ -30,6 +30,7 @@ interface DashboardViewProps {
   onOpenYouTubePlayer: (material: CourseMaterial, course?: Course) => void;
   setActiveTab: (tab: ActiveTab) => void;
   onSelectCourseMaterials?: (courseId: string) => void;
+  onOpenRedeemModal?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -39,6 +40,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenYouTubePlayer,
   setActiveTab,
   onSelectCourseMaterials,
+  onOpenRedeemModal,
 }) => {
   const { profile, user } = useAuth();
   const { courses, materials, events, reorderCourses, toggleEventCompleted } = useData();
@@ -115,13 +117,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Welcome Banner */}
-      <div className="p-6 rounded-2xl bg-blue-600 text-white shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 text-white shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg sm:text-2xl font-bold tracking-tight">
               สวัสดี, {profile?.displayName || user?.displayName || 'นักเรียน'}!
             </h1>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 font-medium backdrop-blur-xs">
+            <span className="text-[11px] sm:text-xs px-2.5 py-0.5 rounded-full bg-white/20 font-medium backdrop-blur-xs">
               {profile?.targetExam || 'เตรียมสอบ A-Level'}
             </span>
           </div>
@@ -130,12 +132,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </p>
         </div>
 
-        {/* Quick Add Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Quick Add & Redeem Action Buttons */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {onOpenRedeemModal && (
+            <button
+              id="dash-redeem-btn"
+              onClick={onOpenRedeemModal}
+              className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 font-bold text-xs shadow-xs transition-colors cursor-pointer"
+              title="กรอกโค้ด 6 หลักเพื่อรับคอร์สติวจากเพื่อน"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-900" />
+              <span>ใส่โค้ดรับคอร์ส</span>
+            </button>
+          )}
           <button
             id="dash-add-course-btn"
             onClick={onOpenCourseModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-blue-900 hover:bg-blue-50 font-medium text-xs shadow-xs transition-colors cursor-pointer"
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-blue-900 hover:bg-blue-50 font-semibold text-xs shadow-xs transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4 text-blue-600" />
             <span>เพิ่มคอร์สติว</span>
@@ -143,26 +156,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button
             id="dash-add-material-btn"
             onClick={() => onOpenMaterialModal()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700/60 hover:bg-blue-700 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
           >
-            <FileText className="w-4 h-4 text-blue-200" />
-            <span>เพิ่มชีท / ยูทูป</span>
+            <FileText className="w-3.5 h-3.5 text-blue-100" />
+            <span>เพิ่มชีท/คลิป</span>
           </button>
           <button
             id="dash-add-event-btn"
             onClick={() => onOpenEventModal(selectedDateStr)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700/60 hover:bg-blue-700 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
+            className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
           >
-            <CalendarIcon className="w-4 h-4 text-blue-200" />
-            <span>ลงวันสอบ / ส่งงาน</span>
-          </button>
-          <button
-            id="dash-news-btn"
-            onClick={() => setActiveTab('news')}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700/60 hover:bg-blue-700 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
-          >
-            <Users className="w-4 h-4 text-blue-200" />
-            <span>ชุมชนเด็กติว</span>
+            <CalendarIcon className="w-3.5 h-3.5 text-blue-100" />
+            <span>ลงวันสอบ</span>
           </button>
         </div>
       </div>
@@ -242,43 +247,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {/* Stat Cards - Fluid and minimal on iPad/tablet & Mobile */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-3 md:gap-3.5 lg:gap-4">
         <div 
           onClick={() => setActiveTab('courses')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
+          className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">วิชาและคอร์สติว</span>
+            <span className="text-xs font-semibold text-slate-500">คอร์สและวิชาติว</span>
             <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <BookOpen className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">{totalCourses}</span>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-slate-900">{totalCourses}</span>
             <span className="text-xs text-slate-400">วิชา</span>
           </div>
         </div>
 
         <div 
           onClick={() => setActiveTab('materials')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
+          className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">ชีทและเอกสาร</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <FileText className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">{totalSheets}</span>
-            <span className="text-xs text-slate-400">ไฟล์/สไลด์</span>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-slate-900">{totalSheets}</span>
+            <span className="text-xs text-slate-400">ไฟล์/ชีท</span>
           </div>
         </div>
 
         <div 
           onClick={() => setActiveTab('materials')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
+          className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">คลิป YouTube</span>
@@ -286,25 +291,25 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <Youtube className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">{totalVideos}</span>
-            <span className="text-xs text-slate-400">คลิป ({completedVideos} ดูจบแล้ว)</span>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-slate-900">{totalVideos}</span>
+            <span className="text-xs text-slate-400">คลิป ({completedVideos} จบ)</span>
           </div>
         </div>
 
         <div 
           onClick={() => setActiveTab('calendar')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
+          className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-200/90 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">กำหนดการสอบ/ส่งงาน</span>
+            <span className="text-xs font-semibold text-slate-500">กำหนดการสอบ</span>
             <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <CalendarIcon className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">{upcomingEvents.length}</span>
-            <span className="text-xs text-slate-400">นัดหมายเร็วๆ นี้</span>
+          <div className="mt-2 flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold tracking-tight text-slate-900">{upcomingEvents.length}</span>
+            <span className="text-xs text-slate-400">รายการเร็วๆ นี้</span>
           </div>
         </div>
       </div>

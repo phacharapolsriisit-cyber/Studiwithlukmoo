@@ -41,7 +41,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successNotice, setSuccessNotice] = useState(false);
   const [privateLink, setPrivateLink] = useState('');
+  const [shareCode, setShareCode] = useState('');
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedCode, setCopiedCode] = useState(false);
   const [privateNote, setPrivateNote] = useState('');
 
   const isCourse = Boolean(course);
@@ -87,28 +89,43 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   useEffect(() => {
     if (isOpen && targetItem) {
-      // Automatically prepare private share link
-      createPrivateShareLink(targetItem, privateNote).then((url) => {
-        setPrivateLink(url);
+      // Automatically prepare private share link and short code instantly
+      createPrivateShareLink(targetItem, privateNote).then((res) => {
+        setPrivateLink(res.url);
+        setShareCode(res.shareCode);
       });
       setCopiedLink(false);
+      setCopiedCode(false);
       setSuccessNotice(false);
       setContent('');
     }
-  }, [isOpen, course, material]);
+  }, [isOpen, course?.id, material?.id]);
 
   if (!isOpen || !targetItem) return null;
+
+  const handleCopyCode = async () => {
+    if (!shareCode) return;
+    try {
+      await navigator.clipboard.writeText(shareCode);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 3000);
+    } catch {}
+  };
 
   const handleCopyPrivateLink = async () => {
     if (!targetItem) return;
     try {
-      const url = await createPrivateShareLink(targetItem, privateNote);
-      setPrivateLink(url);
-      await navigator.clipboard.writeText(url);
+      let linkToCopy = privateLink;
+      if (!linkToCopy) {
+        const res = await createPrivateShareLink(targetItem, privateNote);
+        setPrivateLink(res.url);
+        setShareCode(res.shareCode);
+        linkToCopy = res.url;
+      }
+      await navigator.clipboard.writeText(linkToCopy);
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 3000);
     } catch {
-      // Fallback
       if (privateLink) {
         navigator.clipboard.writeText(privateLink);
         setCopiedLink(true);
@@ -257,29 +274,60 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-1">
               <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
                 <Lock className="w-3.5 h-3.5 text-blue-600" />
-                <span>แชร์แบบส่วนตัว (Private Direct Link)</span>
+                <span>แชร์แบบส่วนตัว (Private Direct Code & Link)</span>
               </div>
               <p className="text-xs text-slate-600">
-                ข้อมูลจะไม่แสดงบนหน้าบอร์ดชุมชนสาธารณะ เพื่อนที่ได้รับลิงก์นี้เท่านั้นที่จะสามารถกดเปิดและกดบันทึกเข้าคลังวิชาของเขาได้ทันที
+                ข้อมูลจะไม่แสดงบนหน้าบอร์ดชุมชนสาธารณะ เพื่อนที่ได้รับรหัสหรือลิงก์นี้เท่านั้นที่จะสามารถกดรับและบันทึกเข้าคลังวิชาได้ทันที
               </p>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                ข้อความโน้ตสั้นๆ แนบไปกับลิงก์ (ถ้ามี)
-              </label>
-              <input
-                type="text"
-                placeholder="เช่น การบ้านบทที่ 3, สรุปฟิสิกส์สำหรับสอบปลายภาค..."
-                value={privateNote}
-                onChange={(e) => setPrivateNote(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
-              />
+            {/* Option A: 6-Character Short Share Code */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  รหัสแชร์ 6 หลัก (ส่งโค้ดให้เพื่อนกรอกได้เลย)
+                </span>
+                <span className="text-[10px] text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                  สั้น กระชับ จำง่าย
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-white border-2 border-blue-200 rounded-xl py-2 px-3 flex items-center justify-center tracking-widest font-mono text-base sm:text-lg font-black text-blue-700 select-all shadow-2xs">
+                  {shareCode || 'LM-....'}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                    copiedCode
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
+                  }`}
+                >
+                  {copiedCode ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>คัดลอกโค้ดแล้ว!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>คัดลอกโค้ด</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <p className="text-[11px] text-slate-500">
+                เพื่อนสามารถกดปุ่ม <strong>"ใส่โค้ดรับคอร์ส"</strong> บนหน้าเว็บแล้วพิมพ์รหัสนี้ได้ทันที
+              </p>
             </div>
 
+            {/* Option B: Short Direct URL */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                ลิงก์สำหรับส่งต่อให้เพื่อน
+                หรือส่งเป็นลิงก์สั้น (Short URL)
               </label>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
@@ -288,13 +336,13 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     type="text"
                     readOnly
                     value={privateLink || 'กำลังสร้างลิงก์...'}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 text-xs text-slate-600 bg-slate-50 select-all font-mono"
+                    className="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-600 bg-slate-50 select-all font-mono"
                   />
                 </div>
                 <button
                   type="button"
                   onClick={handleCopyPrivateLink}
-                  className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                     copiedLink
                       ? 'bg-emerald-600 text-white'
                       : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
@@ -315,10 +363,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </div>
             </div>
 
-            {copiedLink && (
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                ข้อความโน้ตสั้นๆ แนบไปด้วย (ถ้ามี)
+              </label>
+              <input
+                type="text"
+                placeholder="เช่น การบ้านบทที่ 3, สรุปฟิสิกส์สำหรับสอบปลายภาค..."
+                value={privateNote}
+                onChange={(e) => setPrivateNote(e.target.value)}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+              />
+            </div>
+
+            {(copiedLink || copiedCode) && (
               <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>คัดลอกลิงก์เรียบร้อยแล้ว ส่งให้เพื่อนทาง Line, Messenger หรือ Discord ได้เลย!</span>
+                <span>คัดลอกเรียบร้อยแล้ว ส่งให้เพื่อนทาง Line, Messenger หรือ Discord ได้เลย!</span>
               </div>
             )}
 

@@ -50,14 +50,15 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 }) => {
   const [courseFilter, setCourseFilter] = useState<string>(selectedCourseIdFilter || 'all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'history' | 'order' | 'newest' | 'title'>('history');
+  const [sortBy, setSortBy] = useState<'order' | 'history' | 'newest' | 'title'>('order');
   const [searchQuery, setSearchQuery] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
-  // Sync selected course filter from external navigation
+  // Sync selected course filter from external navigation and default to ordered sequence
   useEffect(() => {
     if (selectedCourseIdFilter) {
       setCourseFilter(selectedCourseIdFilter);
+      setSortBy('order');
     }
   }, [selectedCourseIdFilter]);
 
@@ -75,6 +76,12 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
 
   // Sort materials
   const sortedMaterials = [...filteredMaterials].sort((a, b) => {
+    if (sortBy === 'order') {
+      const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      // Secondary sort: เรียงตามเวลาที่เพิ่ม/บันทึก (createdAt)
+      return (a.createdAt || '').localeCompare(b.createdAt || '');
+    }
     if (sortBy === 'history') {
       // Prioritize items with view history / recent interaction
       const timeA = a.lastWatchedAt ? new Date(a.lastWatchedAt).getTime() : (a.playbackPosition ? 1000 : 0);
@@ -84,9 +91,6 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
       const createdA = new Date(a.createdAt || 0).getTime();
       const createdB = new Date(b.createdAt || 0).getTime();
       return createdB - createdA;
-    }
-    if (sortBy === 'order') {
-      return (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
     }
     if (sortBy === 'newest') {
       return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
@@ -254,8 +258,8 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
               onChange={(e) => setSortBy(e.target.value as any)}
               className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
             >
+              <option value="order">📌 ตามลำดับที่จัดเรียง (ตามเวลา)</option>
               <option value="history">⏱️ ประวัติการเข้าชมล่าสุด</option>
-              <option value="order">📌 ตามลำดับที่จัดเรียง</option>
               <option value="newest">✨ เพิ่มล่าสุด</option>
               <option value="title">🔤 ตามชื่อ ก-ฮ</option>
             </select>

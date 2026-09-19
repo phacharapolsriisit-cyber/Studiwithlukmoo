@@ -59,7 +59,7 @@ interface DataContextType {
   addPortfolioItem: (item: Omit<PortfolioItem, 'id' | 'createdAt'>) => Promise<string>;
   updatePortfolioItem: (id: string, data: Partial<PortfolioItem>) => Promise<void>;
   deletePortfolioItem: (id: string) => Promise<void>;
-  createPrivateShareLink: (payload: SharedItemPayload, note?: string) => Promise<string>;
+  createPrivateShareLink: (payload: SharedItemPayload, note?: string) => Promise<{ url: string; shareCode: string; shareId: string }>;
   resolvePrivateShare: (shareCode?: string, shareId?: string) => Promise<SharedItemPayload | null>;
   exportBackupData: () => string;
   importBackupData: (jsonData: string) => Promise<void>;
@@ -95,13 +95,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
 
-  // Set of deleted IDs to immediately ignore any incoming snapshots or race conditions
-  const deletedIdsRef = useRef<Set<string>>(new Set());
+  // Persistent Set of deleted IDs to permanently ignore any incoming snapshots or race conditions
+  const localDeletedKey = user ? `lukmoo_deleted_ids_${user.uid}` : 'lukmoo_deleted_ids_guest';
+  const deletedIdsRef = useRef<Set<string>>(new Set(getLocalData<string[]>(localDeletedKey, [])));
+
+  // Keep deleted IDs in sync across user sessions
+  useEffect(() => {
+    if (user) {
+      const stored = getLocalData<string[]>(`lukmoo_deleted_ids_${user.uid}`, []);
+      deletedIdsRef.current = new Set(stored);
+    }
+  }, [user]);
+
+  const markIdsAsDeleted = (ids: string[]) => {
+    ids.forEach(id => deletedIdsRef.current.add(id));
+    const key = user ? `lukmoo_deleted_ids_${user.uid}` : 'lukmoo_deleted_ids_guest';
+    const stored = getLocalData<string[]>(key, []);
+    const merged = Array.from(new Set([...stored, ...ids])).slice(-2000);
+    setLocalData(key, merged);
+  };
 
   const localCourseKey = user ? `lukmoo_data_${user.uid}_courses` : '';
   const localMatKey = user ? `lukmoo_data_${user.uid}_materials` : '';
   const localEvKey = user ? `lukmoo_data_${user.uid}_events` : '';
   const localPortKey = user ? `lukmoo_data_${user.uid}_portfolio` : '';
+
+  // Timer refs for high-speed debounced Firestore batch writes
+  const reorderCoursesTimerRef = useRef<any>(null);
+  const reorderMaterialsTimerRef = useRef<any>(null);
+  const lastLocalCourseReorderTimeRef = useRef<number>(0);
+  const lastLocalMaterialReorderTimeRef = useRef<number>(0);
 
   // Synchronize community posts to local storage whenever updated
   useEffect(() => {
@@ -123,16 +146,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoadingData(true);
     markSyncing();
 
-    // If demo user or without cloud auth token, load strictly from user's isolated local store
-    if (user.isDemo) {
-      const localC = getLocalData<Course[]>(localCourseKey, []);
-      const localM = getLocalData<CourseMaterial[]>(localMatKey, []);
-      const localE = getLocalData<CalendarEvent[]>(localEvKey, []);
-      const localP = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
+    // 1. Instantly hydrate from local storage so refreshing the page never flashes blank or reverts
+    const localC = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
+    const localM = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
+    const localE = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
+    const localP = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
+
+    if (localC.length > 0) {
+      localC.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
       setCourses(localC);
+    }
+    if (localM.length > 0) {
+      localM.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
       setMaterials(localM);
+    }
+    if (localE.length > 0) {
+      localE.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
       setEvents(localE);
+    }
+    if (localP.length > 0) {
       setPortfolioItems(localP);
+    }
+
+    // If demo user or without cloud auth token, finish hydration here
+    if (user.isDemo) {
       setIsLoadingData(false);
       markSynced();
       return;
@@ -149,11 +186,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubCourses = onSnapshot(coursesRef, (snapshot) => {
         const list: Course[] = [];
         snapshot.forEach((docSnap) => {
-          if (!deletedIdsRef.current.has(docSnap.id)) {
-            list.push({ id: docSnap.id, ...docSnap.data() } as Course);
+          const data = docSnap.data();
+          if (!deletedIdsRef.current.has(docSnap.id) && !data._deleted && !data.isDeleted) {
+            list.push({ id: docSnap.id, ...data } as Course);
           }
         });
-        list.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+        // If local user reordered items within the last 2.5s, preserve the local orderIndex
+        const timeSinceLocalReorder = Date.now() - lastLocalCourseReorderTimeRef.current;
+        if (timeSinceLocalReorder < 2500) {
+          const currentLocal = getLocalData<Course[]>(localCourseKey, []);
+          const orderMap = new Map<string, number>(currentLocal.map((c, i) => [c.id, c.orderIndex ?? i]));
+          list.forEach((item) => {
+            const preservedOrder = orderMap.get(item.id);
+            if (preservedOrder !== undefined) {
+              item.orderIndex = preservedOrder;
+            }
+          });
+        }
+
+        // Sort by orderIndex first, tiebreak with createdAt (chronological time)
+        list.sort((a, b) => {
+          const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+          if (orderDiff !== 0) return orderDiff;
+          return (a.createdAt || '').localeCompare(b.createdAt || '');
+        });
 
         setCourses(list);
         setLocalData(localCourseKey, list);
@@ -170,11 +227,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubMaterials = onSnapshot(materialsRef, (snapshot) => {
         const list: CourseMaterial[] = [];
         snapshot.forEach((docSnap) => {
-          if (!deletedIdsRef.current.has(docSnap.id)) {
-            list.push({ id: docSnap.id, ...docSnap.data() } as CourseMaterial);
+          const data = docSnap.data();
+          if (!deletedIdsRef.current.has(docSnap.id) && !data._deleted && !data.isDeleted) {
+            list.push({ id: docSnap.id, ...data } as CourseMaterial);
           }
         });
-        list.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+        // Preserve local orderIndex if user just reordered
+        const timeSinceLocalReorder = Date.now() - lastLocalMaterialReorderTimeRef.current;
+        if (timeSinceLocalReorder < 2500) {
+          const currentLocal = getLocalData<CourseMaterial[]>(localMatKey, []);
+          const orderMap = new Map<string, number>(currentLocal.map((m, i) => [m.id, m.orderIndex ?? i]));
+          list.forEach((item) => {
+            const preservedOrder = orderMap.get(item.id);
+            if (preservedOrder !== undefined) {
+              item.orderIndex = preservedOrder;
+            }
+          });
+        }
+
+        // Sort by orderIndex first, tiebreak with createdAt (chronological time)
+        list.sort((a, b) => {
+          const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
+          if (orderDiff !== 0) return orderDiff;
+          return (a.createdAt || '').localeCompare(b.createdAt || '');
+        });
 
         setMaterials(list);
         setLocalData(localMatKey, list);
@@ -189,8 +266,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubEvents = onSnapshot(eventsRef, (snapshot) => {
         const list: CalendarEvent[] = [];
         snapshot.forEach((docSnap) => {
-          if (!deletedIdsRef.current.has(docSnap.id)) {
-            list.push({ id: docSnap.id, ...docSnap.data() } as CalendarEvent);
+          const data = docSnap.data();
+          if (!deletedIdsRef.current.has(docSnap.id) && !data._deleted && !data.isDeleted) {
+            list.push({ id: docSnap.id, ...data } as CalendarEvent);
           }
         });
         list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -240,29 +318,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'crs_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const nowIso = new Date().toISOString();
     const newCourse: Course = {
       ...courseData,
       id: newId,
       orderIndex: courses.length,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
-    // Update state immediately
+    // 1. Update state & localStorage immediately (instant responsiveness)
     const updated = [...courses, newCourse];
     setCourses(updated);
     setLocalData(localCourseKey, updated);
 
-    // Save to Firestore if real user
+    // 2. Persist to Firestore asynchronously
     if (!user.isDemo) {
-      try {
-        const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
-        await setDoc(courseDocRef, sanitizeForFirestore(newCourse), { merge: true });
-      } catch (err) {
-        console.error('Failed to save course to Firestore:', err);
-      }
+      const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
+      setDoc(courseDocRef, sanitizeForFirestore(newCourse), { merge: true })
+        .then(() => markSynced())
+        .catch((err) => {
+          console.error('Failed to save course to Firestore:', err);
+        });
+    } else {
+      markSynced();
     }
-    markSynced();
     return newId;
   };
 
@@ -275,25 +355,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLocalData(localCourseKey, updated);
 
     if (!user.isDemo) {
-      try {
-        const courseRef = doc(db, 'users', user.uid, 'courses', id);
-        await setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true });
-      } catch (err) {
-        console.error('Failed to update course in Firestore:', err);
-      }
+      const courseRef = doc(db, 'users', user.uid, 'courses', id);
+      setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true })
+        .then(() => markSynced())
+        .catch((err) => {
+          console.error('Failed to update course in Firestore:', err);
+        });
+    } else {
+      markSynced();
     }
-    markSynced();
   };
 
   const deleteCourse = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    deletedIdsRef.current.add(id);
 
     const relatedMatIds = materials.filter(m => m.courseId === id).map(m => m.id);
     const relatedEvIds = events.filter(e => e.courseId === id).map(e => e.id);
-    relatedMatIds.forEach(mId => deletedIdsRef.current.add(mId));
-    relatedEvIds.forEach(eId => deletedIdsRef.current.add(eId));
+    const allDeletedIds = [id, ...relatedMatIds, ...relatedEvIds];
+    markIdsAsDeleted(allDeletedIds);
 
     setCourses(prev => {
       const updated = prev.filter(c => c.id !== id);
@@ -314,18 +394,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'courses', id));
-        for (const mId of relatedMatIds) {
-          try {
-            await deleteDoc(doc(db, 'users', user.uid, 'materials', mId));
-          } catch {}
-        }
-        for (const eId of relatedEvIds) {
-          try {
-            await deleteDoc(doc(db, 'users', user.uid, 'events', eId));
-          } catch {}
-        }
       } catch (err) {
-        console.error('Failed to delete course in Firestore:', err);
+        console.warn('Failed to delete course in Firestore, marking tombstone:', err);
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'courses', id), { _deleted: true, isDeleted: true }, { merge: true });
+        } catch {}
+      }
+      for (const mId of relatedMatIds) {
+        try {
+          await deleteDoc(doc(db, 'users', user.uid, 'materials', mId));
+        } catch {
+          try {
+            await setDoc(doc(db, 'users', user.uid, 'materials', mId), { _deleted: true, isDeleted: true }, { merge: true });
+          } catch {}
+        }
+      }
+      for (const eId of relatedEvIds) {
+        try {
+          await deleteDoc(doc(db, 'users', user.uid, 'events', eId));
+        } catch {
+          try {
+            await setDoc(doc(db, 'users', user.uid, 'events', eId), { _deleted: true, isDeleted: true }, { merge: true });
+          } catch {}
+        }
       }
     }
     markSynced();
@@ -333,19 +424,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const reorderCourses = async (newOrderedList: Course[]) => {
     if (!user) return;
-    const reindexed = newOrderedList.map((c, idx) => ({ ...c, orderIndex: idx }));
+    lastLocalCourseReorderTimeRef.current = Date.now();
+    const nowIso = new Date().toISOString();
+    const reindexed = newOrderedList.map((c, idx) => ({ ...c, orderIndex: idx, updatedAt: nowIso }));
+    
+    // 1. Instant local state & localStorage update for 0ms lag
     setCourses(reindexed);
     setLocalData(localCourseKey, reindexed);
 
+    // 2. Debounced batch commit to Firestore with atomic set merge
     if (!user.isDemo) {
-      try {
-        const batch = writeBatch(db);
-        reindexed.forEach((course) => {
-          const ref = doc(db, 'users', user.uid, 'courses', course.id);
-          batch.update(ref, { orderIndex: course.orderIndex });
-        });
-        await batch.commit();
-      } catch {}
+      if (reorderCoursesTimerRef.current) {
+        clearTimeout(reorderCoursesTimerRef.current);
+      }
+      reorderCoursesTimerRef.current = setTimeout(async () => {
+        try {
+          markSyncing();
+          const batch = writeBatch(db);
+          reindexed.forEach((course) => {
+            const ref = doc(db, 'users', user.uid, 'courses', course.id);
+            batch.set(ref, { orderIndex: course.orderIndex, updatedAt: course.updatedAt }, { merge: true });
+          });
+          await batch.commit();
+          markSynced();
+        } catch (err) {
+          console.error('Failed to commit reorderCourses batch:', err);
+        }
+      }, 180);
     }
   };
 
@@ -354,27 +459,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'mat_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const nowIso = new Date().toISOString();
     const newMaterial: CourseMaterial = {
       ...materialData,
       id: newId,
       orderIndex: materials.filter(m => m.courseId === materialData.courseId).length,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
+    // 1. Update state and localStorage immediately
     const updated = [...materials, newMaterial];
     setMaterials(updated);
     setLocalData(localMatKey, updated);
 
+    // 2. Persist to Firestore asynchronously without blocking UI
     if (!user.isDemo) {
-      try {
-        const sanitized = sanitizeForFirestore(newMaterial);
-        await setDoc(doc(db, 'users', user.uid, 'materials', newId), sanitized, { merge: true });
-      } catch (err) {
-        console.error('Failed to save material to Firestore:', err);
-      }
+      const matDocRef = doc(db, 'users', user.uid, 'materials', newId);
+      setDoc(matDocRef, sanitizeForFirestore(newMaterial), { merge: true })
+        .then(() => markSynced())
+        .catch((err) => {
+          console.error('Failed to save material to Firestore:', err);
+        });
+    } else {
+      markSynced();
     }
-    markSynced();
     return newId;
   };
 
@@ -387,20 +496,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLocalData(localMatKey, updated);
 
     if (!user.isDemo) {
-      try {
-        const sanitized = sanitizeForFirestore(updatedFields);
-        await setDoc(doc(db, 'users', user.uid, 'materials', id), sanitized, { merge: true });
-      } catch (err) {
-        console.error('Failed to update material in Firestore:', err);
-      }
+      const matDocRef = doc(db, 'users', user.uid, 'materials', id);
+      setDoc(matDocRef, sanitizeForFirestore(updatedFields), { merge: true })
+        .then(() => markSynced())
+        .catch((err) => {
+          console.error('Failed to update material in Firestore:', err);
+        });
+    } else {
+      markSynced();
     }
-    markSynced();
   };
 
   const deleteMaterial = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    deletedIdsRef.current.add(id);
+    markIdsAsDeleted([id]);
 
     setMaterials(prev => {
       const updated = prev.filter(m => m.id !== id);
@@ -412,7 +522,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'materials', id));
       } catch (err) {
-        console.error('Failed to delete material from Firestore:', err);
+        console.warn('Failed to delete material in Firestore, writing tombstone:', err);
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'materials', id), { _deleted: true, isDeleted: true }, { merge: true });
+        } catch {}
       }
     }
     markSynced();
@@ -424,22 +537,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const reorderMaterials = async (courseId: string, newOrderedList: CourseMaterial[]) => {
     if (!user) return;
-    const reindexedCourseItems = newOrderedList.map((m, idx) => ({ ...m, orderIndex: idx }));
+    lastLocalMaterialReorderTimeRef.current = Date.now();
+    const nowIso = new Date().toISOString();
+    const reindexedCourseItems = newOrderedList.map((m, idx) => ({ ...m, orderIndex: idx, updatedAt: nowIso }));
     const otherItems = materials.filter(m => m.courseId !== courseId);
     const allMaterials = [...otherItems, ...reindexedCourseItems];
 
+    // 1. Update state & localStorage immediately
     setMaterials(allMaterials);
     setLocalData(localMatKey, allMaterials);
 
+    // 2. Debounced batch commit to Firestore with atomic set merge
     if (!user.isDemo) {
-      try {
-        const batch = writeBatch(db);
-        reindexedCourseItems.forEach((mat) => {
-          const ref = doc(db, 'users', user.uid, 'materials', mat.id);
-          batch.update(ref, { orderIndex: mat.orderIndex });
-        });
-        await batch.commit();
-      } catch {}
+      if (reorderMaterialsTimerRef.current) {
+        clearTimeout(reorderMaterialsTimerRef.current);
+      }
+      reorderMaterialsTimerRef.current = setTimeout(async () => {
+        try {
+          markSyncing();
+          const batch = writeBatch(db);
+          reindexedCourseItems.forEach((mat) => {
+            const ref = doc(db, 'users', user.uid, 'materials', mat.id);
+            batch.set(ref, { orderIndex: mat.orderIndex, updatedAt: mat.updatedAt }, { merge: true });
+          });
+          await batch.commit();
+          markSynced();
+        } catch (err) {
+          console.error('Failed to commit reorderMaterials batch:', err);
+        }
+      }, 180);
     }
   };
 
@@ -448,11 +574,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'ev_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const nowIso = new Date().toISOString();
     const newEvent: CalendarEvent = {
       ...eventData,
       id: newId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
 
     const updated = [...events, newEvent];
@@ -460,13 +587,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLocalData(localEvKey, updated);
 
     if (!user.isDemo) {
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'events', newId), sanitizeForFirestore(newEvent), { merge: true });
-      } catch (err) {
-        console.error('Failed to save event to Firestore:', err);
-      }
+      const evDocRef = doc(db, 'users', user.uid, 'events', newId);
+      setDoc(evDocRef, sanitizeForFirestore(newEvent), { merge: true })
+        .then(() => markSynced())
+        .catch((err) => {
+          console.error('Failed to save event to Firestore:', err);
+        });
+    } else {
+      markSynced();
     }
-    markSynced();
     return newId;
   };
 
@@ -479,19 +608,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLocalData(localEvKey, updated);
 
     if (!user.isDemo) {
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'events', id), sanitizeForFirestore(updatedFields), { merge: true });
-      } catch (err) {
-        console.error('Failed to update event in Firestore:', err);
-      }
+      const evDocRef = doc(db, 'users', user.uid, 'events', id);
+      setDoc(evDocRef, sanitizeForFirestore(updatedFields), { merge: true })
+        .then(() => markSynced())
+        .catch((err) => {
+          console.error('Failed to update event in Firestore:', err);
+        });
+    } else {
+      markSynced();
     }
-    markSynced();
   };
 
   const deleteEvent = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    deletedIdsRef.current.add(id);
+    markIdsAsDeleted([id]);
 
     setEvents(prev => {
       const updated = prev.filter(e => e.id !== id);
@@ -503,7 +634,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'events', id));
       } catch (err) {
-        console.error('Failed to delete event from Firestore:', err);
+        console.warn('Failed to delete event from Firestore, writing tombstone:', err);
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'events', id), { _deleted: true, isDeleted: true }, { merge: true });
+        } catch {}
       }
     }
     markSynced();
@@ -774,54 +908,138 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     markSynced();
   };
 
-  // Private share link creation
-  const createPrivateShareLink = async (payload: SharedItemPayload, note?: string): Promise<string> => {
-    const shareId = 'shr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 7);
+  // Private share link creation with short 6-character code (optimized for instant 0ms generation)
+  const createPrivateShareLink = async (
+    payload: SharedItemPayload, 
+    note?: string
+  ): Promise<{ url: string; shareCode: string; shareId: string }> => {
+    // Generate sleek, memorable 6-char share code e.g. LM-8K39
+    const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+    let rand = '';
+    for (let i = 0; i < 4; i++) {
+      rand += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    const shareCode = `LM-${rand}`;
+    const cleanCode = `LM${rand}`;
+    const shareId = 'shr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+
+    // Sanitize payload to keep it ultra-lightweight (<200KB) for instant network transport
+    const lightweightPayload: SharedItemPayload = {
+      ...payload,
+      materials: payload.materials?.map(m => ({
+        ...m,
+        // If file data exceeds 200KB, omit heavy base64 so upload and download are blazing fast
+        fileData: m.fileData && m.fileData.length < 200000 ? m.fileData : undefined,
+      }))
+    };
+
     const record = {
       id: shareId,
+      shareCode,
+      cleanCode,
       authorId: user ? user.uid : 'anonymous',
       authorName: profile?.displayName || user?.displayName || 'เพื่อนเด็กติว Lukmoo',
-      type: payload.type,
-      payload,
+      type: lightweightPayload.type,
+      payload: lightweightPayload,
       note: note || '',
       createdAt: new Date().toISOString(),
     };
 
-    // Save in local storage lookup
+    // 1. Instant local storage cache under all alias keys (0ms access)
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
+    localShares[shareCode] = record;
+    localShares[cleanCode] = record;
     localShares[shareId] = record;
     setLocalData('lukmoo_private_shares', localShares);
 
-    // Save in firestore if connected
+    // 2. Persist to Firestore asynchronously in background without blocking UI/link generation
     if (user && !user.isDemo) {
-      try {
-        await setDoc(doc(db, 'shared_links', shareId), record);
-      } catch (e) {
-        console.warn('Firestore shared_links save error', e);
-      }
+      const sanitized = sanitizeForFirestore(record);
+      Promise.all([
+        setDoc(doc(db, 'shared_links', cleanCode), sanitized),
+        setDoc(doc(db, 'shared_links', shareCode), sanitized),
+      ]).catch((e) => {
+        console.warn('Firestore shared_links background save warning:', e);
+      });
     }
-
-    // Build URL with query param
-    let code = '';
-    try {
-      // Safe base64 unicode
-      const json = JSON.stringify(payload);
-      code = btoa(encodeURIComponent(json).replace(/%([0-9A-F]{2})/g, (_, p1) => String.fromCharCode(parseInt(p1, 16))));
-    } catch {}
 
     const baseUrl = window.location.origin + window.location.pathname;
-    if (code) {
-      return `${baseUrl}?share_code=${encodeURIComponent(code)}&share_id=${shareId}`;
-    }
-    return `${baseUrl}?share_id=${shareId}`;
+    const shareUrl = `${baseUrl}?code=${shareCode}`;
+
+    return {
+      url: shareUrl,
+      shareCode,
+      shareId,
+    };
   };
 
-  const resolvePrivateShare = async (shareCode?: string, shareId?: string): Promise<SharedItemPayload | null> => {
-    // 1. Try decoding share_code
-    if (shareCode) {
+  const resolvePrivateShare = async (shareCodeOrQuery?: string, shareId?: string): Promise<SharedItemPayload | null> => {
+    if (!shareCodeOrQuery && !shareId) return null;
+
+    let query = (shareCodeOrQuery || shareId || '').trim();
+
+    // If a full link was pasted into the input, extract query parameters
+    if (query.includes('?') || query.includes('http')) {
+      try {
+        const urlObj = new URL(query, window.location.origin);
+        query = urlObj.searchParams.get('code') || 
+                urlObj.searchParams.get('share_code') || 
+                urlObj.searchParams.get('share_id') || 
+                query;
+      } catch {}
+    }
+
+    const upper = query.toUpperCase().replace(/\s+/g, '');
+    const cleanNoHyphen = upper.replace(/-/g, '');
+    const formattedHyphen = upper.includes('-') 
+      ? upper 
+      : (upper.startsWith('LM') && upper.length === 6 ? `LM-${upper.substring(2)}` : upper);
+
+    // 1. Check local cache (instant 0ms)
+    const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
+    const localFound = localShares[query] || 
+                       localShares[upper] || 
+                       localShares[cleanNoHyphen] || 
+                       localShares[formattedHyphen] || 
+                       (shareId ? localShares[shareId] : null);
+
+    if (localFound?.payload && localFound.payload.title) {
+      return localFound.payload as SharedItemPayload;
+    }
+
+    // 2. Check Firestore collection 'shared_links' in parallel (single roundtrip)
+    const lookupKeys = Array.from(new Set([
+      cleanNoHyphen, 
+      formattedHyphen, 
+      upper, 
+      query, 
+      shareId
+    ].filter(Boolean))) as string[];
+
+    try {
+      const snaps = await Promise.all(
+        lookupKeys.map(k => getDoc(doc(db, 'shared_links', k)).catch(() => null))
+      );
+      for (let i = 0; i < snaps.length; i++) {
+        const snap = snaps[i];
+        if (snap && snap.exists()) {
+          const data = snap.data();
+          if (data?.payload && data.payload.title && data.payload.type) {
+            localShares[lookupKeys[i]] = data;
+            setLocalData('lukmoo_private_shares', localShares);
+            return data.payload as SharedItemPayload;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore parallel shared link fetch error:', err);
+    }
+
+    // 3. Backward compatibility: Base64 decode for older long share codes
+    if (query.length > 25) {
       try {
         const decoded = decodeURIComponent(
-          Array.prototype.map.call(atob(decodeURIComponent(shareCode)), (c: string) => {
+          Array.prototype.map.call(atob(decodeURIComponent(query)), (c: string) => {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
           }).join('')
         );
@@ -830,33 +1048,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return parsed as SharedItemPayload;
         }
       } catch {}
-    }
-
-    // 2. Try looking up shareId in local cache
-    const key = shareId || shareCode;
-    if (key) {
-      try {
-        const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
-        if (localShares[key]?.payload) {
-          return localShares[key].payload;
-        }
-      } catch {}
-    }
-
-    // 3. Try fetching from Firestore collection 'shared_links' (for cross-device access)
-    const firestoreKey = shareId || (shareCode && !shareCode.startsWith('{') && shareCode.length < 50 ? shareCode : undefined);
-    if (firestoreKey) {
-      try {
-        const snap = await getDoc(doc(db, 'shared_links', firestoreKey));
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data?.payload && data.payload.title && data.payload.type) {
-            return data.payload as SharedItemPayload;
-          }
-        }
-      } catch (err) {
-        console.warn('Firestore shared link fetch error:', err);
-      }
     }
 
     return null;
@@ -920,17 +1111,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || user.isDemo) return;
     markSyncing();
     try {
-      const cachedCourses = getLocalData<Course[]>(localCourseKey, []);
+      const cachedCourses = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
       for (const c of cachedCourses) {
         await setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true });
       }
 
-      const cachedMaterials = getLocalData<CourseMaterial[]>(localMatKey, []);
+      const cachedMaterials = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
       for (const m of cachedMaterials) {
         await setDoc(doc(db, 'users', user.uid, 'materials', m.id), sanitizeForFirestore(m), { merge: true });
       }
 
-      const cachedEvents = getLocalData<CalendarEvent[]>(localEvKey, []);
+      const cachedEvents = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
       for (const e of cachedEvents) {
         await setDoc(doc(db, 'users', user.uid, 'events', e.id), sanitizeForFirestore(e), { merge: true });
       }

@@ -35,10 +35,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 gap-4">
+        <div className="flex items-center justify-between h-16 gap-3">
           
           {/* Logo & Brand */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+          <div className="flex items-center gap-2.5 cursor-pointer shrink-0" onClick={() => setActiveTab('dashboard')}>
             <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
               <GraduationCap className="w-5 h-5" />
             </div>
@@ -57,88 +57,88 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Navigation Items (Only when logged in) */}
           {user && (
-            <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/70">
+            <nav className="hidden md:flex items-center gap-1 bg-slate-100/80 p-1 rounded-xl border border-slate-200/70 shrink-0">
               <button
                 id="nav-dashboard-btn"
                 onClick={() => setActiveTab('dashboard')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
                   activeTab === 'dashboard'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4 text-blue-600" />
-                แดชบอร์ด
+                <LayoutDashboard className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-blue-600" />
+                <span>แดชบอร์ด</span>
               </button>
               <button
                 id="nav-courses-btn"
                 onClick={() => setActiveTab('courses')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
                   activeTab === 'courses'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <FolderKanban className="w-4 h-4 text-blue-600" />
-                วิชาและคอร์สติว
+                <FolderKanban className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-blue-600" />
+                <span>คอร์สติว</span>
               </button>
               <button
                 id="nav-materials-btn"
                 onClick={() => setActiveTab('materials')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
                   activeTab === 'materials'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <BookOpen className="w-4 h-4 text-emerald-600" />
-                ชีท & ยูทูป
+                <BookOpen className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-emerald-600" />
+                <span>ชีท & คลิป</span>
               </button>
               <button
                 id="nav-calendar-btn"
                 onClick={() => setActiveTab('calendar')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
                   activeTab === 'calendar'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <CalendarIcon className="w-4 h-4 text-purple-600" />
-                ปฏิทินสอบ
+                <CalendarIcon className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-purple-600" />
+                <span>ปฏิทิน</span>
               </button>
               <button
                 id="nav-portfolio-btn"
                 onClick={() => setActiveTab('portfolio')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
                   activeTab === 'portfolio'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <FolderHeart className="w-4 h-4 text-rose-500" />
-                Portfolio ผลงาน
+                <FolderHeart className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-rose-500" />
+                <span>Portfolio</span>
               </button>
               <button
                 id="nav-news-btn"
                 onClick={() => setActiveTab('news')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
+                className={`flex items-center gap-1.5 px-2.5 lg:px-3 py-1.5 rounded-lg text-xs lg:text-sm font-medium transition-all ${
                   activeTab === 'news'
                     ? 'bg-white text-slate-900 shadow-xs'
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <Users className="w-4 h-4 text-orange-500" />
-                ชุมชนเด็กติว
+                <Users className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-orange-500" />
+                <span>ชุมชน</span>
               </button>
             </nav>
           )}
 
-          {/* Right Actions: Cloud Sync Status & User Profile */}
-          <div className="flex items-center gap-3">
+          {/* Right Actions: Cloud Sync & User Profile */}
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Cloud Sync Status */}
             {user && (
               <div 
-                className="hidden lg:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600"
+                className="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600"
                 title={`เชื่อมต่อ Firebase: lukmoo-tutor (${lastSyncTime ? 'ซิงค์เมื่อ ' + lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'})`}
               >
                 {syncStatus === 'syncing' ? (
@@ -175,10 +175,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </div>
                 )}
                 <div className="hidden sm:block">
-                  <div className="text-xs font-semibold text-slate-900 max-w-[130px] truncate leading-tight">
+                  <div className="text-xs font-semibold text-slate-900 max-w-[110px] md:max-w-[130px] truncate leading-tight">
                     {profile?.displayName || user.displayName || 'นักเรียน'}
                   </div>
-                  <div className="text-[10px] text-slate-500 max-w-[130px] truncate">
+                  <div className="text-[10px] text-slate-500 max-w-[110px] md:max-w-[130px] truncate">
                     {user.email}
                   </div>
                 </div>

@@ -1027,22 +1027,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore across all alias document IDs
+    // 2. Persist to Firestore across alias document IDs in background
     const sanitized = sanitizeForFirestore(record);
-    const writePromises = [
+    Promise.all([
       setDoc(doc(db, 'shared_links', cleanCode), sanitized),
       setDoc(doc(db, 'shared_links', formattedCode), sanitized),
       setDoc(doc(db, 'shared_links', shareId), sanitized),
-    ];
-    if (suffixOnly) {
-      writePromises.push(setDoc(doc(db, 'shared_links', suffixOnly), sanitized));
-    }
-
-    try {
-      await Promise.all(writePromises);
-    } catch (e) {
-      console.error('Firestore shared_links save error:', e);
-    }
+    ]).catch((e) => {
+      console.warn('Firestore shared_links save error:', e);
+    });
 
     const baseUrl = window.location.origin + window.location.pathname;
     const shareUrl = `${baseUrl}?code=${formattedCode}`;

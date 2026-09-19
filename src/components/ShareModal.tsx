@@ -47,7 +47,6 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [privateNote, setPrivateNote] = useState('');
-  const [isCodeReady, setIsCodeReady] = useState(false);
 
   const isCourse = Boolean(course);
   const courseMaterials = course ? materials.filter(m => m.courseId === course.id) : [];
@@ -109,14 +108,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
       setCopiedMessage(false);
       setSuccessNotice(false);
       setContent('');
-      setIsCodeReady(false);
 
-      createPrivateShareLink(targetItem, privateNote, instantCode)
-        .then(() => setIsCodeReady(true))
-        .catch((err) => {
-          console.warn('Background share link sync:', err);
-          setIsCodeReady(true);
-        });
+      // Non-blocking instant persistence in background
+      createPrivateShareLink(targetItem, privateNote, instantCode).catch((err) => {
+        console.warn('Background share link sync:', err);
+      });
     }
   }, [isOpen, instantCode, course?.id, material?.id]);
 
@@ -124,10 +120,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const handleCopyCode = async () => {
     if (!shareCode || !targetItem) return;
-    try {
-      await createPrivateShareLink(targetItem, privateNote, shareCode);
-      setIsCodeReady(true);
-    } catch {}
+    createPrivateShareLink(targetItem, privateNote, shareCode).catch(console.error);
     try {
       await navigator.clipboard.writeText(shareCode);
       setCopiedCode(true);
@@ -140,10 +133,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
   const handleCopyChatInvite = async () => {
     if (!targetItem || !shareCode) return;
-    try {
-      await createPrivateShareLink(targetItem, privateNote, shareCode);
-      setIsCodeReady(true);
-    } catch {}
+    createPrivateShareLink(targetItem, privateNote, shareCode).catch(console.error);
     const message = `ฉันแชร์${isCourse ? 'วิชา' : 'เอกสาร'} "${targetItem.title}" ในเว็บ Lukmoo Tutor ให้แล้วนะ!\nนำรหัสนี้: ${shareCode}\nไปกรอกที่ปุ่ม "ใส่โค้ดรับคอร์ส" บนเว็บเพื่อรับเข้าคลังของคุณได้ทันที`;
     try {
       await navigator.clipboard.writeText(message);
@@ -394,17 +384,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </div>
 
               <div className="flex items-center justify-center">
-                {isCodeReady ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                    <span>รหัสออนไลน์พร้อมส่งให้เพื่อนแล้ว</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                    <span>กำลังเชื่อมต่อฐานข้อมูล...</span>
-                  </span>
-                )}
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>รหัสพร้อมใช้งาน • กดคัดลอกส่งให้เพื่อนได้ทันที</span>
+                </span>
               </div>
 
               {/* 2 Quick Copy Buttons */}

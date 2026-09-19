@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { 
   db, 
   collection, 
@@ -8,9 +8,7 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
-  orderBy, 
   where,
-  limit,
   getDocs,
   onSnapshot,
   writeBatch
@@ -18,7 +16,6 @@ import {
 import { useAuth } from './AuthContext';
 import { Course, CourseMaterial, CalendarEvent, CommunityPost, PostComment, SharedItemPayload, PortfolioItem } from '../types';
 import { INITIAL_COMMUNITY_POSTS } from '../data/mockCommunity';
-import { INITIAL_PORTFOLIO_ITEMS } from '../data/mockPortfolio';
 import { convertTCASToCalendarEvents } from '../data/tcas70Schedule';
 
 export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
@@ -59,50 +56,7 @@ export function isQuotaError(err: any): boolean {
          msg.includes('maximum backoff delay');
 }
 
-interface DataContextType {
-  courses: Course[];
-  materials: CourseMaterial[];
-  events: CalendarEvent[];
-  communityPosts: CommunityPost[];
-  portfolioItems: PortfolioItem[];
-  isLoadingData: boolean;
-  addCourse: (course: Omit<Course, 'id' | 'createdAt' | 'orderIndex'>) => Promise<string>;
-  updateCourse: (id: string, data: Partial<Course>) => Promise<void>;
-  deleteCourse: (id: string) => Promise<void>;
-  reorderCourses: (newOrderedList: Course[]) => Promise<void>;
-  addMaterial: (material: Omit<CourseMaterial, 'id' | 'createdAt' | 'orderIndex'>) => Promise<string>;
-  updateMaterial: (id: string, data: Partial<CourseMaterial>) => Promise<void>;
-  deleteMaterial: (id: string) => Promise<void>;
-  toggleMaterialCompleted: (id: string, current: boolean) => Promise<void>;
-  reorderMaterials: (courseId: string, newOrderedList: CourseMaterial[]) => Promise<void>;
-  addEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt'>) => Promise<string>;
-  updateEvent: (id: string, data: Partial<CalendarEvent>) => Promise<void>;
-  deleteEvent: (id: string) => Promise<void>;
-  toggleEventCompleted: (id: string, current: boolean) => Promise<void>;
-  addCommunityPost: (content: string, tags: string[], imageUrl?: string, sharedItem?: SharedItemPayload) => Promise<string>;
-  likeCommunityPost: (postId: string) => Promise<void>;
-  addCommentToPost: (postId: string, content: string) => Promise<void>;
-  deleteCommunityPost: (postId: string) => Promise<void>;
-  importSharedItem: (sharedItem: SharedItemPayload) => Promise<{ success: boolean; message: string; courseId?: string }>;
-  addPortfolioItem: (item: Omit<PortfolioItem, 'id' | 'createdAt'>) => Promise<string>;
-  updatePortfolioItem: (id: string, data: Partial<PortfolioItem>) => Promise<void>;
-  deletePortfolioItem: (id: string) => Promise<void>;
-  createPrivateShareLink: (payload: SharedItemPayload, note?: string, presetCode?: string) => Promise<{ url: string; shareCode: string; shareId: string }>;
-  resolvePrivateShare: (shareCode?: string, shareId?: string) => Promise<SharedItemPayload | null>;
-  exportBackupData: () => string;
-  importBackupData: (jsonData: string) => Promise<void>;
-  syncWithCloud: () => Promise<void>;
-  pinnedTCASEvents: CalendarEvent[];
-  tcasCompletedIds: string[];
-  toggleTCASCompleted: (id: string) => void;
-  showPinnedTCAS: boolean;
-  setShowPinnedTCAS: (show: boolean) => void;
-  allEvents: CalendarEvent[];
-}
-
-const DataContext = createContext<DataContextType | undefined>(undefined);
-
-// LocalStorage helpers for offline or demo user persistence
+// LocalStorage helpers for offline or fast hydration
 export const getLocalData = <T,>(key: string, fallback: T): T => {
   try {
     const raw = localStorage.getItem(key);
@@ -118,7 +72,7 @@ export const setLocalData = <T,>(key: string, data: T) => {
   } catch {}
 };
 
-// Compact URL / Base64 encoding for 100% reliable 1-click sharing without database quota dependency
+// Compact URL / Base64 encoding for reliable 1-click sharing
 export function encodeSharedPayload(payload: SharedItemPayload): string {
   try {
     const compact = {
@@ -164,7 +118,6 @@ export function decodeSharedPayload(encoded: string): SharedItemPayload | null {
       }
       compact = JSON.parse(new TextDecoder().decode(bytes));
     } catch {
-      // Fallback for older format
       const decodedStr = decodeURIComponent(Array.prototype.map.call(atob(base64), (c: string) => {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
       }).join(''));
@@ -194,69 +147,86 @@ export function decodeSharedPayload(encoded: string): SharedItemPayload | null {
   }
 }
 
+interface DataContextType {
+  courses: Course[];
+  materials: CourseMaterial[];
+  events: CalendarEvent[];
+  communityPosts: CommunityPost[];
+  portfolioItems: PortfolioItem[];
+  isLoadingData: boolean;
+  addCourse: (course: Omit<Course, 'id' | 'createdAt' | 'orderIndex'>) => Promise<string>;
+  updateCourse: (id: string, data: Partial<Course>) => Promise<void>;
+  deleteCourse: (id: string) => Promise<void>;
+  reorderCourses: (newOrderedList: Course[]) => Promise<void>;
+  addMaterial: (material: Omit<CourseMaterial, 'id' | 'createdAt' | 'orderIndex'>) => Promise<string>;
+  updateMaterial: (id: string, data: Partial<CourseMaterial>) => Promise<void>;
+  deleteMaterial: (id: string) => Promise<void>;
+  toggleMaterialCompleted: (id: string, current: boolean) => Promise<void>;
+  reorderMaterials: (courseId: string, newOrderedList: CourseMaterial[]) => Promise<void>;
+  addEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt'>) => Promise<string>;
+  updateEvent: (id: string, data: Partial<CalendarEvent>) => Promise<void>;
+  deleteEvent: (id: string) => Promise<void>;
+  toggleEventCompleted: (id: string, current: boolean) => Promise<void>;
+  addCommunityPost: (content: string, tags: string[], imageUrl?: string, sharedItem?: SharedItemPayload) => Promise<string>;
+  likeCommunityPost: (postId: string) => Promise<void>;
+  addCommentToPost: (postId: string, content: string) => Promise<void>;
+  deleteCommunityPost: (postId: string) => Promise<void>;
+  importSharedItem: (sharedItem: SharedItemPayload) => Promise<{ success: boolean; message: string; courseId?: string }>;
+  addPortfolioItem: (item: Omit<PortfolioItem, 'id' | 'createdAt'>) => Promise<string>;
+  updatePortfolioItem: (id: string, data: Partial<PortfolioItem>) => Promise<void>;
+  deletePortfolioItem: (id: string) => Promise<void>;
+  createPrivateShareLink: (payload: SharedItemPayload, note?: string, presetCode?: string) => Promise<{ url: string; shareCode: string; shareId: string }>;
+  resolvePrivateShare: (shareCode?: string, shareId?: string) => Promise<SharedItemPayload | null>;
+  exportBackupData: () => string;
+  importBackupData: (jsonData: string) => Promise<void>;
+  syncWithCloud: () => Promise<void>;
+  pinnedTCASEvents: CalendarEvent[];
+  tcasCompletedIds: string[];
+  toggleTCASCompleted: (id: string) => void;
+  showPinnedTCAS: boolean;
+  setShowPinnedTCAS: (show: boolean) => void;
+  allEvents: CalendarEvent[];
+}
+
+const DataContext = createContext<DataContextType | undefined>(undefined);
+
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, markSyncing, markSynced, markSyncError } = useAuth();
 
-  // Get active UID directly or from cached auth session for 0ms hydration
-  const getActiveUserPrefix = () => {
-    if (user?.uid) return user.uid;
-    try {
-      const cached = localStorage.getItem('lukmoo_authenticated_user_session');
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed?.uid) return parsed.uid;
-      }
-      const demoCached = localStorage.getItem('lukmoo_demo_user_session');
-      if (demoCached) {
-        const parsed = JSON.parse(demoCached);
-        if (parsed?.user?.uid) return parsed.user.uid;
-      }
-    } catch {}
-    return 'guest';
-  };
+  // Helper to determine active local storage prefix
+  const getCacheKey = useCallback((sub: string) => {
+    const uid = user?.uid || 'guest';
+    return `lukmoo_cache_${uid}_${sub}`;
+  }, [user?.uid]);
 
-  const userPrefix = getActiveUserPrefix();
-  const localCourseKey = `lukmoo_data_${userPrefix}_courses`;
-  const localMatKey = `lukmoo_data_${userPrefix}_materials`;
-  const localEvKey = `lukmoo_data_${userPrefix}_events`;
-  const localPortKey = `lukmoo_data_${userPrefix}_portfolio`;
-  const localDeletedKey = `lukmoo_deleted_${userPrefix}_ids`;
-
-  // Persistent tracking for deleted IDs so deleted items are never resurrected by snapshots
-  const deletedIdsRef = useRef<Set<string>>(new Set(getLocalData<string[]>(localDeletedKey, [])));
-
-  const markItemAsDeleted = (id: string) => {
-    deletedIdsRef.current.add(id);
-    const arr = Array.from(deletedIdsRef.current);
-    setLocalData(localDeletedKey, arr);
-  };
-
+  // Main state - initialize from local cache for instant UI rendering
   const [courses, setCourses] = useState<Course[]>(() => {
-    const raw = getLocalData<Course[]>(localCourseKey, []);
-    return raw.filter(c => !deletedIdsRef.current.has(c.id));
+    if (!user) return [];
+    return getLocalData<Course[]>(`lukmoo_cache_${user.uid}_courses`, []);
   });
 
   const [materials, setMaterials] = useState<CourseMaterial[]>(() => {
-    const raw = getLocalData<CourseMaterial[]>(localMatKey, []);
-    return raw.filter(m => !deletedIdsRef.current.has(m.id));
+    if (!user) return [];
+    return getLocalData<CourseMaterial[]>(`lukmoo_cache_${user.uid}_materials`, []);
   });
 
   const [events, setEvents] = useState<CalendarEvent[]>(() => {
-    const raw = getLocalData<CalendarEvent[]>(localEvKey, []);
-    return raw.filter(e => !deletedIdsRef.current.has(e.id));
+    if (!user) return [];
+    return getLocalData<CalendarEvent[]>(`lukmoo_cache_${user.uid}_events`, []);
   });
 
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>(() => {
-    const raw = getLocalData<PortfolioItem[]>(localPortKey, []);
-    return raw.filter(p => !deletedIdsRef.current.has(p.id));
+    if (!user) return [];
+    return getLocalData<PortfolioItem[]>(`lukmoo_cache_${user.uid}_portfolio`, []);
   });
 
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>(() => {
     return getLocalData<CommunityPost[]>('lukmoo_community_posts', INITIAL_COMMUNITY_POSTS);
   });
+
   const [isLoadingData, setIsLoadingData] = useState<boolean>(false);
 
-  // TCAS70 pinned schedule state (pinned for everyone)
+  // TCAS70 pinned schedule state
   const [tcasCompletedIds, setTcasCompletedIds] = useState<string[]>(() =>
     getLocalData<string[]>('lukmoo_tcas_completed_ids', [])
   );
@@ -267,17 +237,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getLocalData<boolean>('lukmoo_show_pinned_tcas', true)
   );
 
+  // TCAS Methods
   const toggleTCASCompleted = (id: string) => {
     setTcasCompletedIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
       setLocalData('lukmoo_tcas_completed_ids', next);
-      
-      // Persist to Firestore if user is logged in
       if (user && !user.isDemo) {
-        const profileRef = doc(db, 'users', user.uid);
-        updateDoc(profileRef, { tcasCompletedIds: next }).catch(e => console.warn('TCAS sync error:', e));
+        updateDoc(doc(db, 'users', user.uid), { tcasCompletedIds: next }).catch(() => {});
       }
-      
       return next;
     });
   };
@@ -286,12 +253,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHiddenTcasIds(prev => {
       const next = [...prev, id];
       setLocalData('lukmoo_hidden_tcas_ids', next);
-      
       if (user && !user.isDemo) {
-        const profileRef = doc(db, 'users', user.uid);
-        updateDoc(profileRef, { hiddenTcasIds: next }).catch(e => console.warn('TCAS hidden sync error:', e));
+        updateDoc(doc(db, 'users', user.uid), { hiddenTcasIds: next }).catch(() => {});
       }
-      
       return next;
     });
   };
@@ -299,10 +263,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSetShowPinnedTCAS = (show: boolean) => {
     setShowPinnedTCAS(show);
     setLocalData('lukmoo_show_pinned_tcas', show);
-    
     if (user && !user.isDemo) {
-      const profileRef = doc(db, 'users', user.uid);
-      updateDoc(profileRef, { showPinnedTCAS: show }).catch(e => console.warn('TCAS visibility sync error:', e));
+      updateDoc(doc(db, 'users', user.uid), { showPinnedTCAS: show }).catch(() => {});
     }
   };
 
@@ -322,102 +284,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return events;
   }, [events, pinnedTCASEvents, showPinnedTCAS]);
 
-  // Timer refs for high-speed debounced Firestore batch writes
+  // Timers for batch reorders
   const reorderCoursesTimerRef = useRef<any>(null);
   const reorderMaterialsTimerRef = useRef<any>(null);
-  const lastLocalCourseReorderTimeRef = useRef<number>(0);
-  const lastLocalMaterialReorderTimeRef = useRef<number>(0);
 
-  // Active real-time sync for community posts (visible to all users across the app)
-  const deletedPostIdsRef = useRef<Set<string>>(new Set());
-
+  // ----------------------------------------------------
+  // Real-time Firestore Synchronization Across Devices
+  // ----------------------------------------------------
   useEffect(() => {
-    let isMounted = true;
-
-    // Helper to merge and sort posts without duplicates
-    const updatePostsSafely = (incoming: CommunityPost[]) => {
-      setCommunityPosts(prev => {
-        const map = new Map<string, CommunityPost>();
-        INITIAL_COMMUNITY_POSTS.forEach(p => {
-          if (!deletedPostIdsRef.current.has(p.id)) {
-            map.set(p.id, p);
-          }
-        });
-        prev.forEach(p => {
-          if (!deletedPostIdsRef.current.has(p.id)) {
-            map.set(p.id, p);
-          }
-        });
-        incoming.forEach(p => {
-          if (p && p.id && !deletedPostIdsRef.current.has(p.id)) {
-            map.set(p.id, { ...map.get(p.id), ...p });
-          }
-        });
-        const combined = Array.from(map.values());
-        combined.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-        setLocalData('lukmoo_community_posts', combined);
-        return combined;
-      });
-    };
-
-    // 1. Fetch immediately from /api/community/posts (works for all students across the app, 0ms lag, no Firebase quota limits)
-    const fetchServerPosts = async () => {
-      try {
-        const res = await fetch('/api/community/posts');
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && Array.isArray(data) && data.length > 0) {
-            updatePostsSafely(data);
-          }
-        }
-      } catch {
-        // Fallback gracefully
-      }
-    };
-
-    fetchServerPosts();
-    // Poll every 4 seconds so all students on different devices see new posts in real-time
-    const pollTimer = setInterval(fetchServerPosts, 4000);
-
-    // 2. Also listen to Firestore collection 'community_posts' for real-time cloud updates
-    let unsubCommunity: () => void = () => {};
-    try {
-      const postsRef = collection(db, 'community_posts');
-      unsubCommunity = onSnapshot(postsRef, (snapshot) => {
-        if (!snapshot.empty) {
-          const cloudPosts: CommunityPost[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            if (data) {
-              cloudPosts.push({ id: docSnap.id, ...data } as CommunityPost);
-            }
-          });
-          if (isMounted && cloudPosts.length > 0) {
-            updatePostsSafely(cloudPosts);
-          }
-        }
-      }, (error) => {
-        console.warn('Community posts onSnapshot notice:', error?.message);
-      });
-    } catch (err) {
-      console.warn('Failed to listen to community_posts collection:', err);
-    }
-
-    return () => {
-      isMounted = false;
-      clearInterval(pollTimer);
-      unsubCommunity();
-    };
-  }, []);
-
-  // Synchronize community posts to local storage whenever updated
-  useEffect(() => {
-    setLocalData('lukmoo_community_posts', communityPosts);
-  }, [communityPosts]);
-
-  useEffect(() => {
-    // If user is not logged in:
-    // "เปิดมาไม่ให้มีวิชาไหนเลย จนกว่าจะล็อคอิน และให้เห็นเฉพาะงานของตัวเอง"
+    // 1. If not logged in, clear private user data immediately
     if (!user) {
       setCourses([]);
       setMaterials([]);
@@ -427,56 +302,51 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    setIsLoadingData(true);
-    markSyncing();
+    const uid = user.uid;
+    const courseCacheKey = `lukmoo_cache_${uid}_courses`;
+    const matCacheKey = `lukmoo_cache_${uid}_materials`;
+    const evCacheKey = `lukmoo_cache_${uid}_events`;
+    const portCacheKey = `lukmoo_cache_${uid}_portfolio`;
 
-    // 1. Instantly hydrate from local storage so refreshing the page never flashes blank
-    const localC = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
-    const localM = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
-    const localE = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
-    const localP = getLocalData<PortfolioItem[]>(localPortKey, []).filter(p => !deletedIdsRef.current.has(p.id));
+    // 2. Instant cache hydration for current user
+    const cachedC = getLocalData<Course[]>(courseCacheKey, []);
+    const cachedM = getLocalData<CourseMaterial[]>(matCacheKey, []);
+    const cachedE = getLocalData<CalendarEvent[]>(evCacheKey, []);
+    const cachedP = getLocalData<PortfolioItem[]>(portCacheKey, []);
 
-    if (localC.length > 0) {
-      localC.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
-      setCourses(localC);
-    }
-    if (localM.length > 0) {
-      localM.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
-      setMaterials(localM);
-    }
-    if (localE.length > 0) {
-      localE.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-      setEvents(localE);
-    }
-    if (localP.length > 0) {
-      setPortfolioItems(localP);
-    }
+    if (cachedC.length > 0) setCourses(cachedC);
+    if (cachedM.length > 0) setMaterials(cachedM);
+    if (cachedE.length > 0) setEvents(cachedE);
+    if (cachedP.length > 0) setPortfolioItems(cachedP);
 
-    // If demo user or without cloud auth token, finish hydration here
+    // If demo user, no cloud listener needed
     if (user.isDemo) {
       setIsLoadingData(false);
       markSynced();
       return;
     }
 
-    // Cloud Firestore listeners (Source of truth across phone, computer, and iPad)
-    let unsubCourses: () => void = () => {};
-    let unsubMaterials: () => void = () => {};
-    let unsubEvents: () => void = () => {};
-    let unsubPortfolio: () => void = () => {};
-    let unsubProfile: () => void = () => {};
+    setIsLoadingData(true);
+    markSyncing();
+
+    // 3. Connect real-time Firestore listeners for active cloud user
+    let unsubCourses = () => {};
+    let unsubMaterials = () => {};
+    let unsubEvents = () => {};
+    let unsubPortfolio = () => {};
+    let unsubProfile = () => {};
 
     try {
-      // 0. Listen to User Profile for settings and TCAS sync
-      const profileRef = doc(db, 'users', user.uid);
+      // Profile listener (TCAS settings, etc.)
+      const profileRef = doc(db, 'users', uid);
       unsubProfile = onSnapshot(profileRef, (snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          if (data.tcasCompletedIds && Array.isArray(data.tcasCompletedIds)) {
+          if (Array.isArray(data.tcasCompletedIds)) {
             setTcasCompletedIds(data.tcasCompletedIds);
             setLocalData('lukmoo_tcas_completed_ids', data.tcasCompletedIds);
           }
-          if (data.hiddenTcasIds && Array.isArray(data.hiddenTcasIds)) {
+          if (Array.isArray(data.hiddenTcasIds)) {
             setHiddenTcasIds(data.hiddenTcasIds);
             setLocalData('lukmoo_hidden_tcas_ids', data.hiddenTcasIds);
           }
@@ -485,159 +355,104 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLocalData('lukmoo_show_pinned_tcas', data.showPinnedTCAS);
           }
         }
-      }, (err) => {
-        console.warn('Profile sync notice:', err?.message);
-      });
+      }, () => {});
 
-      // 1. Courses snapshot listener with intelligent two-way merge
-      const coursesRef = collection(db, 'users', user.uid, 'courses');
+      // Courses listener
+      const coursesRef = collection(db, 'users', uid, 'courses');
       unsubCourses = onSnapshot(coursesRef, (snapshot) => {
-        const cloudList: Course[] = [];
+        const cloudCourses: Course[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!data._deleted && !data.isDeleted && !deletedIdsRef.current.has(docSnap.id)) {
-            cloudList.push({ id: docSnap.id, ...data } as Course);
+          if (!data._deleted && !data.isDeleted) {
+            cloudCourses.push({ id: docSnap.id, ...data } as Course);
           }
         });
 
-        // Merge with local items created on this device that haven't synced yet
-        const cloudIds = new Set(cloudList.map(c => c.id));
-        const currentLocal = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
-        const localOnly = currentLocal.filter(c => !cloudIds.has(c.id));
-        
-        const mergedList = [...cloudList, ...localOnly];
-        mergedList.sort((a, b) => {
+        cloudCourses.sort((a, b) => {
           const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
           if (orderDiff !== 0) return orderDiff;
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
 
-        setCourses(mergedList);
-        setLocalData(localCourseKey, mergedList);
+        setCourses(cloudCourses);
+        setLocalData(courseCacheKey, cloudCourses);
         markSynced();
         setIsLoadingData(false);
-
-        // Auto-sync any local-only courses to cloud in background
-        if (localOnly.length > 0) {
-          localOnly.forEach(c => {
-            setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true }).catch(() => {});
-          });
-        }
       }, (err) => {
-        if (!isQuotaError(err)) {
-          console.warn('Courses sync notice:', err?.message);
-        }
-        markSynced();
+        if (!isQuotaError(err)) console.warn('Courses sync listener notice:', err?.message);
         setIsLoadingData(false);
+        markSynced();
       });
 
-      // 2. Materials snapshot listener with intelligent two-way merge
-      const materialsRef = collection(db, 'users', user.uid, 'materials');
+      // Materials listener
+      const materialsRef = collection(db, 'users', uid, 'materials');
       unsubMaterials = onSnapshot(materialsRef, (snapshot) => {
-        const cloudList: CourseMaterial[] = [];
+        const cloudMats: CourseMaterial[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!data._deleted && !data.isDeleted && !deletedIdsRef.current.has(docSnap.id)) {
-            cloudList.push({ id: docSnap.id, ...data } as CourseMaterial);
+          if (!data._deleted && !data.isDeleted) {
+            cloudMats.push({ id: docSnap.id, ...data } as CourseMaterial);
           }
         });
 
-        const cloudIds = new Set(cloudList.map(m => m.id));
-        const currentLocal = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
-        const localOnly = currentLocal.filter(m => !cloudIds.has(m.id));
-
-        const mergedList = [...cloudList, ...localOnly];
-        mergedList.sort((a, b) => {
+        cloudMats.sort((a, b) => {
           const orderDiff = (a.orderIndex ?? 0) - (b.orderIndex ?? 0);
           if (orderDiff !== 0) return orderDiff;
           return (a.createdAt || '').localeCompare(b.createdAt || '');
         });
 
-        setMaterials(mergedList);
-        setLocalData(localMatKey, mergedList);
+        setMaterials(cloudMats);
+        setLocalData(matCacheKey, cloudMats);
         markSynced();
-
-        if (localOnly.length > 0) {
-          localOnly.forEach(m => {
-            setDoc(doc(db, 'users', user.uid, 'materials', m.id), sanitizeForFirestore(m), { merge: true }).catch(() => {});
-          });
-        }
       }, (err) => {
-        if (!isQuotaError(err)) {
-          console.warn('Materials sync notice:', err?.message);
-        }
+        if (!isQuotaError(err)) console.warn('Materials sync listener notice:', err?.message);
         markSynced();
       });
 
-      // 3. Events snapshot listener with intelligent two-way merge
-      const eventsRef = collection(db, 'users', user.uid, 'events');
+      // Events listener
+      const eventsRef = collection(db, 'users', uid, 'events');
       unsubEvents = onSnapshot(eventsRef, (snapshot) => {
-        const cloudList: CalendarEvent[] = [];
+        const cloudEvents: CalendarEvent[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!data._deleted && !data.isDeleted && !deletedIdsRef.current.has(docSnap.id)) {
-            cloudList.push({ id: docSnap.id, ...data } as CalendarEvent);
+          if (!data._deleted && !data.isDeleted) {
+            cloudEvents.push({ id: docSnap.id, ...data } as CalendarEvent);
           }
         });
 
-        const cloudIds = new Set(cloudList.map(e => e.id));
-        const currentLocal = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
-        const localOnly = currentLocal.filter(e => !cloudIds.has(e.id));
+        cloudEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-        const mergedList = [...cloudList, ...localOnly];
-        mergedList.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-
-        setEvents(mergedList);
-        setLocalData(localEvKey, mergedList);
+        setEvents(cloudEvents);
+        setLocalData(evCacheKey, cloudEvents);
         markSynced();
-
-        if (localOnly.length > 0) {
-          localOnly.forEach(e => {
-            setDoc(doc(db, 'users', user.uid, 'events', e.id), sanitizeForFirestore(e), { merge: true }).catch(() => {});
-          });
-        }
       }, (err) => {
-        if (!isQuotaError(err)) {
-          console.warn('Events sync notice:', err?.message);
-        }
+        if (!isQuotaError(err)) console.warn('Events sync listener notice:', err?.message);
         markSynced();
       });
 
-      // 4. Portfolio items snapshot listener with intelligent two-way merge
-      const portRef = collection(db, 'users', user.uid, 'portfolio_items');
+      // Portfolio items listener
+      const portRef = collection(db, 'users', uid, 'portfolio_items');
       unsubPortfolio = onSnapshot(portRef, (snapshot) => {
-        const cloudList: PortfolioItem[] = [];
+        const cloudPort: PortfolioItem[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          if (!data._deleted && !data.isDeleted && !deletedIdsRef.current.has(docSnap.id)) {
-            cloudList.push({ id: docSnap.id, ...data } as PortfolioItem);
+          if (!data._deleted && !data.isDeleted) {
+            cloudPort.push({ id: docSnap.id, ...data } as PortfolioItem);
           }
         });
 
-        const cloudIds = new Set(cloudList.map(p => p.id));
-        const currentLocal = getLocalData<PortfolioItem[]>(localPortKey, []).filter(p => !deletedIdsRef.current.has(p.id));
-        const localOnly = currentLocal.filter(p => !cloudIds.has(p.id));
+        cloudPort.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 
-        const mergedList = [...cloudList, ...localOnly];
-        mergedList.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-
-        setPortfolioItems(mergedList);
-        setLocalData(localPortKey, mergedList);
+        setPortfolioItems(cloudPort);
+        setLocalData(portCacheKey, cloudPort);
         markSynced();
-
-        if (localOnly.length > 0) {
-          localOnly.forEach(p => {
-            setDoc(doc(db, 'users', user.uid, 'portfolio_items', p.id), sanitizeForFirestore(p), { merge: true }).catch(() => {});
-          });
-        }
       }, (err) => {
-        if (!isQuotaError(err)) {
-          console.warn('Portfolio sync notice:', err?.message);
-        }
+        if (!isQuotaError(err)) console.warn('Portfolio sync listener notice:', err?.message);
         markSynced();
       });
-    } catch (e) {
-      console.warn('Cloud listeners initialization fallback:', e);
+
+    } catch (err) {
+      console.warn('Sync connection notice:', err);
       setIsLoadingData(false);
     }
 
@@ -650,8 +465,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [user]);
 
-  // Course actions
-  const addCourse = async (courseData: Omit<Course, 'id' | 'createdAt' | 'orderIndex'>) => {
+  // ----------------------------------------------------
+  // Community Feed Sync (Shared across all users)
+  // ----------------------------------------------------
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchServerPosts = async () => {
+      try {
+        const res = await fetch('/api/community/posts');
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data) && data.length > 0) {
+            setCommunityPosts(data);
+            setLocalData('lukmoo_community_posts', data);
+          }
+        }
+      } catch {}
+    };
+
+    fetchServerPosts();
+    const pollInterval = setInterval(fetchServerPosts, 4000);
+
+    let unsubCommunity = () => {};
+    try {
+      const postsRef = collection(db, 'community_posts');
+      unsubCommunity = onSnapshot(postsRef, (snapshot) => {
+        if (!snapshot.empty) {
+          const cloudPosts: CommunityPost[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            if (data) cloudPosts.push({ id: docSnap.id, ...data } as CommunityPost);
+          });
+          cloudPosts.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+          if (isMounted && cloudPosts.length > 0) {
+            setCommunityPosts(cloudPosts);
+            setLocalData('lukmoo_community_posts', cloudPosts);
+          }
+        }
+      }, () => {});
+    } catch {}
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      unsubCommunity();
+    };
+  }, []);
+
+  // ----------------------------------------------------
+  // CRUD: Course Actions
+  // ----------------------------------------------------
+  const addCourse = async (courseData: Omit<Course, 'id' | 'createdAt' | 'orderIndex'>): Promise<string> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'crs_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
@@ -664,71 +529,52 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: nowIso,
     };
 
-    // 1. Update state & localStorage immediately (instant responsiveness)
+    // 1. Instant local update
     const updated = [...courses, newCourse];
     setCourses(updated);
-    setLocalData(localCourseKey, updated);
+    setLocalData(getCacheKey('courses'), updated);
 
-    // 2. Persist to Firestore asynchronously
+    // 2. Persist to Firestore Cloud
     if (!user.isDemo) {
-      const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
-      setDoc(courseDocRef, sanitizeForFirestore(newCourse), { merge: true })
-        .then(() => markSynced())
-        .catch((err) => {
-          if (!isQuotaError(err)) {
-            console.warn('Notice saving course to Firestore:', err?.message);
-          }
-          markSynced();
-        });
+      try {
+        const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
+        await setDoc(courseDocRef, sanitizeForFirestore(newCourse));
+        markSynced();
+      } catch (err: any) {
+        if (!isQuotaError(err)) console.warn('Notice saving course to Firestore:', err?.message);
+        markSynced();
+      }
     } else {
       markSynced();
     }
     return newId;
   };
 
-  const updateCourse = async (id: string, data: Partial<Course>) => {
+  const updateCourse = async (id: string, data: Partial<Course>): Promise<void> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    // 1. Update React state immediately with functional updater
-    setCourses(prev => {
-      const idx = prev.findIndex(c => c.id === id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], ...updatedFields };
-        return next;
+    let updatedCourseObj: Course | null = null;
+    const updatedList = courses.map(c => {
+      if (c.id === id) {
+        updatedCourseObj = { ...c, ...updatedFields };
+        return updatedCourseObj;
       }
-      return prev;
+      return c;
     });
 
-    // 2. Update local storage with complete course object immediately
-    const currentCached = getLocalData<Course[]>(localCourseKey, []);
-    const cachedIdx = currentCached.findIndex(c => c.id === id);
-    let updatedCourseObj: Course;
-    if (cachedIdx >= 0) {
-      updatedCourseObj = { ...currentCached[cachedIdx], ...updatedFields };
-      currentCached[cachedIdx] = updatedCourseObj;
-    } else {
-      const fromState = courses.find(c => c.id === id);
-      updatedCourseObj = fromState 
-        ? { ...fromState, ...updatedFields } 
-        : ({ id, ...updatedFields } as Course);
-      currentCached.push(updatedCourseObj);
-    }
-    setLocalData(localCourseKey, currentCached);
+    setCourses(updatedList);
+    setLocalData(getCacheKey('courses'), updatedList);
 
-    // 3. Persist complete sanitized object to Firestore with merge: true
-    if (!user.isDemo) {
-      const courseRef = doc(db, 'users', user.uid, 'courses', id);
+    if (!user.isDemo && updatedCourseObj) {
       try {
+        const courseRef = doc(db, 'users', user.uid, 'courses', id);
         await setDoc(courseRef, sanitizeForFirestore(updatedCourseObj), { merge: true });
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) {
-          console.warn('Notice updating course in Firestore:', err?.message);
-        }
+        if (!isQuotaError(err)) console.warn('Notice updating course in Firestore:', err?.message);
         markSynced();
       }
     } else {
@@ -736,104 +582,72 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const deleteCourse = async (id: string) => {
+  const deleteCourse = async (id: string): Promise<void> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
 
-    markItemAsDeleted(id);
     const relatedMatIds = materials.filter(m => m.courseId === id).map(m => m.id);
     const relatedEvIds = events.filter(e => e.courseId === id).map(e => e.id);
 
-    relatedMatIds.forEach(mId => markItemAsDeleted(mId));
-    relatedEvIds.forEach(eId => markItemAsDeleted(eId));
+    const updatedCourses = courses.filter(c => c.id !== id);
+    const updatedMats = materials.filter(m => m.courseId !== id);
+    const updatedEvs = events.filter(e => e.courseId !== id);
 
-    setCourses(prev => {
-      const updated = prev.filter(c => c.id !== id);
-      setLocalData(localCourseKey, updated);
-      return updated;
-    });
-    setMaterials(prev => {
-      const updated = prev.filter(m => m.courseId !== id);
-      setLocalData(localMatKey, updated);
-      return updated;
-    });
-    setEvents(prev => {
-      const updated = prev.filter(e => e.courseId !== id);
-      setLocalData(localEvKey, updated);
-      return updated;
-    });
+    setCourses(updatedCourses);
+    setMaterials(updatedMats);
+    setEvents(updatedEvs);
+
+    setLocalData(getCacheKey('courses'), updatedCourses);
+    setLocalData(getCacheKey('materials'), updatedMats);
+    setLocalData(getCacheKey('events'), updatedEvs);
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'courses', id));
-      } catch {
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'courses', id), { _deleted: true, isDeleted: true }, { merge: true });
-        } catch {}
-      }
-      for (const mId of relatedMatIds) {
-        try {
-          await deleteDoc(doc(db, 'users', user.uid, 'materials', mId));
-        } catch {
-          try {
-            await setDoc(doc(db, 'users', user.uid, 'materials', mId), { _deleted: true, isDeleted: true }, { merge: true });
-          } catch {}
+        for (const mId of relatedMatIds) {
+          await deleteDoc(doc(db, 'users', user.uid, 'materials', mId)).catch(() => {});
         }
-      }
-      for (const eId of relatedEvIds) {
-        try {
-          await deleteDoc(doc(db, 'users', user.uid, 'events', eId));
-        } catch {
-          try {
-            await setDoc(doc(db, 'users', user.uid, 'events', eId), { _deleted: true, isDeleted: true }, { merge: true });
-          } catch {}
+        for (const eId of relatedEvIds) {
+          await deleteDoc(doc(db, 'users', user.uid, 'events', eId)).catch(() => {});
         }
+      } catch (err: any) {
+        console.warn('Notice deleting course from Firestore:', err?.message);
       }
     }
     markSynced();
   };
 
-  const reorderCourses = async (newOrderedList: Course[]) => {
+  const reorderCourses = async (newOrderedList: Course[]): Promise<void> => {
     if (!user) return;
-    lastLocalCourseReorderTimeRef.current = Date.now();
     const nowIso = new Date().toISOString();
-    const prevMap = new Map(courses.map(c => [c.id, c.orderIndex]));
     const reindexed = newOrderedList.map((c, idx) => ({ ...c, orderIndex: idx, updatedAt: nowIso }));
-    
-    // 1. Instant local update
-    setCourses(reindexed);
-    setLocalData(localCourseKey, reindexed);
 
-    // 2. Debounced batch commit - ONLY write items that actually changed order to save quota
+    setCourses(reindexed);
+    setLocalData(getCacheKey('courses'), reindexed);
+
     if (!user.isDemo) {
       if (reorderCoursesTimerRef.current) clearTimeout(reorderCoursesTimerRef.current);
       reorderCoursesTimerRef.current = setTimeout(async () => {
         try {
-          const changedCourses = reindexed.filter((c, idx) => prevMap.get(c.id) !== idx);
-          if (changedCourses.length === 0) {
-            markSynced();
-            return;
-          }
           markSyncing();
           const batch = writeBatch(db);
-          changedCourses.forEach((course) => {
+          reindexed.forEach((course) => {
             const ref = doc(db, 'users', user.uid, 'courses', course.id);
             batch.set(ref, { orderIndex: course.orderIndex, updatedAt: course.updatedAt }, { merge: true });
           });
           await batch.commit();
           markSynced();
         } catch (err) {
-          if (!isQuotaError(err)) {
-            console.warn('Reorder sync notice:', err);
-          }
           markSynced();
         }
-      }, 2500);
+      }, 1500);
     }
   };
 
-  // Material actions
-  const addMaterial = async (materialData: Omit<CourseMaterial, 'id' | 'createdAt' | 'orderIndex'>) => {
+  // ----------------------------------------------------
+  // CRUD: Material Actions
+  // ----------------------------------------------------
+  const addMaterial = async (materialData: Omit<CourseMaterial, 'id' | 'createdAt' | 'orderIndex'>): Promise<string> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'mat_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
@@ -846,68 +660,50 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: nowIso,
     };
 
-    // 1. Update state and localStorage immediately
     const updated = [...materials, newMaterial];
     setMaterials(updated);
-    setLocalData(localMatKey, updated);
+    setLocalData(getCacheKey('materials'), updated);
 
-    // 2. Persist to Firestore asynchronously without blocking UI
     if (!user.isDemo) {
-      const matDocRef = doc(db, 'users', user.uid, 'materials', newId);
-      setDoc(matDocRef, sanitizeForFirestore(newMaterial), { merge: true })
-        .then(() => markSynced())
-        .catch((err) => {
-          if (!isQuotaError(err)) {
-            console.warn('Notice saving material to Firestore:', err?.message);
-          }
-          markSynced();
-        });
+      try {
+        const matDocRef = doc(db, 'users', user.uid, 'materials', newId);
+        await setDoc(matDocRef, sanitizeForFirestore(newMaterial));
+        markSynced();
+      } catch (err: any) {
+        if (!isQuotaError(err)) console.warn('Notice saving material to Firestore:', err?.message);
+        markSynced();
+      }
     } else {
       markSynced();
     }
     return newId;
   };
 
-  const updateMaterial = async (id: string, data: Partial<CourseMaterial>) => {
+  const updateMaterial = async (id: string, data: Partial<CourseMaterial>): Promise<void> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    setMaterials(prev => {
-      const idx = prev.findIndex(m => m.id === id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], ...updatedFields };
-        return next;
+    let updatedMatObj: CourseMaterial | null = null;
+    const updatedList = materials.map(m => {
+      if (m.id === id) {
+        updatedMatObj = { ...m, ...updatedFields };
+        return updatedMatObj;
       }
-      return prev;
+      return m;
     });
 
-    const currentCached = getLocalData<CourseMaterial[]>(localMatKey, []);
-    const cachedIdx = currentCached.findIndex(m => m.id === id);
-    let updatedMatObj: CourseMaterial;
-    if (cachedIdx >= 0) {
-      updatedMatObj = { ...currentCached[cachedIdx], ...updatedFields };
-      currentCached[cachedIdx] = updatedMatObj;
-    } else {
-      const fromState = materials.find(m => m.id === id);
-      updatedMatObj = fromState 
-        ? { ...fromState, ...updatedFields } 
-        : ({ id, ...updatedFields } as CourseMaterial);
-      currentCached.push(updatedMatObj);
-    }
-    setLocalData(localMatKey, currentCached);
+    setMaterials(updatedList);
+    setLocalData(getCacheKey('materials'), updatedList);
 
-    if (!user.isDemo) {
-      const matDocRef = doc(db, 'users', user.uid, 'materials', id);
+    if (!user.isDemo && updatedMatObj) {
       try {
+        const matDocRef = doc(db, 'users', user.uid, 'materials', id);
         await setDoc(matDocRef, sanitizeForFirestore(updatedMatObj), { merge: true });
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) {
-          console.warn('Notice updating material in Firestore:', err?.message);
-        }
+        if (!isQuotaError(err)) console.warn('Notice updating material in Firestore:', err?.message);
         markSynced();
       }
     } else {
@@ -915,78 +711,61 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const deleteMaterial = async (id: string) => {
+  const deleteMaterial = async (id: string): Promise<void> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    markItemAsDeleted(id);
 
-    setMaterials(prev => {
-      const updated = prev.filter(m => m.id !== id);
-      setLocalData(localMatKey, updated);
-      return updated;
-    });
+    const updated = materials.filter(m => m.id !== id);
+    setMaterials(updated);
+    setLocalData(getCacheKey('materials'), updated);
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'materials', id));
-      } catch {
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'materials', id), { _deleted: true, isDeleted: true }, { merge: true });
-        } catch {}
+      } catch (err: any) {
+        console.warn('Notice deleting material in Firestore:', err?.message);
       }
     }
     markSynced();
   };
 
-  const toggleMaterialCompleted = async (id: string, current: boolean) => {
+  const toggleMaterialCompleted = async (id: string, current: boolean): Promise<void> => {
     await updateMaterial(id, { isCompleted: !current });
   };
 
-  const reorderMaterials = async (courseId: string, newOrderedList: CourseMaterial[]) => {
+  const reorderMaterials = async (courseId: string, newOrderedList: CourseMaterial[]): Promise<void> => {
     if (!user) return;
-    lastLocalMaterialReorderTimeRef.current = Date.now();
     const nowIso = new Date().toISOString();
-    const prevMatMap = new Map(materials.filter(m => m.courseId === courseId).map(m => [m.id, m.orderIndex]));
     const reindexedCourseItems = newOrderedList.map((m, idx) => ({ ...m, orderIndex: idx, updatedAt: nowIso }));
     const otherItems = materials.filter(m => m.courseId !== courseId);
     const allMaterials = [...otherItems, ...reindexedCourseItems];
 
-    // 1. Update state & localStorage immediately
     setMaterials(allMaterials);
-    setLocalData(localMatKey, allMaterials);
+    setLocalData(getCacheKey('materials'), allMaterials);
 
-    // 2. Debounced batch commit to Firestore with atomic set merge - ONLY write changed items
     if (!user.isDemo) {
-      if (reorderMaterialsTimerRef.current) {
-        clearTimeout(reorderMaterialsTimerRef.current);
-      }
+      if (reorderMaterialsTimerRef.current) clearTimeout(reorderMaterialsTimerRef.current);
       reorderMaterialsTimerRef.current = setTimeout(async () => {
         try {
-          const changedMats = reindexedCourseItems.filter((m, idx) => prevMatMap.get(m.id) !== idx);
-          if (changedMats.length === 0) {
-            markSynced();
-            return;
-          }
           markSyncing();
           const batch = writeBatch(db);
-          changedMats.forEach((mat) => {
+          reindexedCourseItems.forEach((mat) => {
             const ref = doc(db, 'users', user.uid, 'materials', mat.id);
             batch.set(ref, { orderIndex: mat.orderIndex, updatedAt: mat.updatedAt }, { merge: true });
           });
           await batch.commit();
           markSynced();
         } catch (err) {
-          if (!isQuotaError(err)) {
-            console.warn('Notice reordering materials in Firestore:', err);
-          }
           markSynced();
         }
-      }, 2500);
+      }, 1500);
     }
   };
 
-  // Event actions
-  const addEvent = async (eventData: Omit<CalendarEvent, 'id' | 'createdAt'>) => {
+  // ----------------------------------------------------
+  // CRUD: Event Actions
+  // ----------------------------------------------------
+  const addEvent = async (eventData: Omit<CalendarEvent, 'id' | 'createdAt'>): Promise<string> => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'ev_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
@@ -1000,29 +779,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const updated = [...events, newEvent];
     setEvents(updated);
-    setLocalData(localEvKey, updated);
+    setLocalData(getCacheKey('events'), updated);
 
     if (!user.isDemo) {
-      const evDocRef = doc(db, 'users', user.uid, 'events', newId);
-      setDoc(evDocRef, sanitizeForFirestore(newEvent), { merge: true })
-        .then(() => markSynced())
-        .catch((err) => {
-          if (!isQuotaError(err)) {
-            console.warn('Notice saving event to Firestore:', err?.message);
-          }
-          markSynced();
-        });
+      try {
+        const evDocRef = doc(db, 'users', user.uid, 'events', newId);
+        await setDoc(evDocRef, sanitizeForFirestore(newEvent));
+        markSynced();
+      } catch (err: any) {
+        if (!isQuotaError(err)) console.warn('Notice saving event to Firestore:', err?.message);
+        markSynced();
+      }
     } else {
       markSynced();
     }
     return newId;
   };
 
-  const updateEvent = async (id: string, data: Partial<CalendarEvent>) => {
+  const updateEvent = async (id: string, data: Partial<CalendarEvent>): Promise<void> => {
     if (id.startsWith('tcas70-')) {
-      if (data.isCompleted !== undefined) {
-        toggleTCASCompleted(id);
-      }
+      if (data.isCompleted !== undefined) toggleTCASCompleted(id);
       return;
     }
     if (!user) throw new Error('User not authenticated');
@@ -1030,40 +806,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    setEvents(prev => {
-      const idx = prev.findIndex(e => e.id === id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], ...updatedFields };
-        return next;
+    let updatedEvObj: CalendarEvent | null = null;
+    const updatedList = events.map(e => {
+      if (e.id === id) {
+        updatedEvObj = { ...e, ...updatedFields };
+        return updatedEvObj;
       }
-      return prev;
+      return e;
     });
 
-    const currentCached = getLocalData<CalendarEvent[]>(localEvKey, []);
-    const cachedIdx = currentCached.findIndex(e => e.id === id);
-    let updatedEvObj: CalendarEvent;
-    if (cachedIdx >= 0) {
-      updatedEvObj = { ...currentCached[cachedIdx], ...updatedFields };
-      currentCached[cachedIdx] = updatedEvObj;
-    } else {
-      const fromState = events.find(e => e.id === id);
-      updatedEvObj = fromState 
-        ? { ...fromState, ...updatedFields } 
-        : ({ id, ...updatedFields } as CalendarEvent);
-      currentCached.push(updatedEvObj);
-    }
-    setLocalData(localEvKey, currentCached);
+    setEvents(updatedList);
+    setLocalData(getCacheKey('events'), updatedList);
 
-    if (!user.isDemo) {
-      const evDocRef = doc(db, 'users', user.uid, 'events', id);
+    if (!user.isDemo && updatedEvObj) {
       try {
+        const evDocRef = doc(db, 'users', user.uid, 'events', id);
         await setDoc(evDocRef, sanitizeForFirestore(updatedEvObj), { merge: true });
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) {
-          console.warn('Notice updating event in Firestore:', err?.message);
-        }
+        if (!isQuotaError(err)) console.warn('Notice updating event in Firestore:', err?.message);
         markSynced();
       }
     } else {
@@ -1071,34 +832,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const deleteEvent = async (id: string) => {
+  const deleteEvent = async (id: string): Promise<void> => {
     if (id.startsWith('tcas70-')) {
       hideTCASEvent(id);
       return;
     }
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    markItemAsDeleted(id);
 
-    setEvents(prev => {
-      const updated = prev.filter(e => e.id !== id);
-      setLocalData(localEvKey, updated);
-      return updated;
-    });
+    const updated = events.filter(e => e.id !== id);
+    setEvents(updated);
+    setLocalData(getCacheKey('events'), updated);
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'events', id));
-      } catch {
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'events', id), { _deleted: true, isDeleted: true }, { merge: true });
-        } catch {}
+      } catch (err: any) {
+        console.warn('Notice deleting event in Firestore:', err?.message);
       }
     }
     markSynced();
   };
 
-  const toggleEventCompleted = async (id: string, current: boolean) => {
+  const toggleEventCompleted = async (id: string, current: boolean): Promise<void> => {
     if (id.startsWith('tcas70-')) {
       toggleTCASCompleted(id);
       return;
@@ -1106,7 +862,88 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await updateEvent(id, { isCompleted: !current });
   };
 
+  // ----------------------------------------------------
+  // CRUD: Portfolio Actions
+  // ----------------------------------------------------
+  const addPortfolioItem = async (itemData: Omit<PortfolioItem, 'id' | 'createdAt'>): Promise<string> => {
+    if (!user) throw new Error('User not authenticated');
+    markSyncing();
+    const newId = 'port_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+    const newItem: PortfolioItem = {
+      ...itemData,
+      id: newId,
+      userId: user.uid,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const updated = [newItem, ...portfolioItems];
+    setPortfolioItems(updated);
+    setLocalData(getCacheKey('portfolio'), updated);
+
+    if (!user.isDemo) {
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', newId), sanitizeForFirestore(newItem));
+      } catch (err: any) {
+        if (!isQuotaError(err)) console.warn('Notice saving portfolio item to Firestore:', err?.message);
+      }
+    }
+    markSynced();
+    return newId;
+  };
+
+  const updatePortfolioItem = async (id: string, data: Partial<PortfolioItem>): Promise<void> => {
+    if (!user) throw new Error('User not authenticated');
+    markSyncing();
+    const nowIso = new Date().toISOString();
+    const updatedFields = { ...data, updatedAt: nowIso };
+
+    let updatedPortObj: PortfolioItem | null = null;
+    const updatedList = portfolioItems.map(p => {
+      if (p.id === id) {
+        updatedPortObj = { ...p, ...updatedFields };
+        return updatedPortObj;
+      }
+      return p;
+    });
+
+    setPortfolioItems(updatedList);
+    setLocalData(getCacheKey('portfolio'), updatedList);
+
+    if (!user.isDemo && updatedPortObj) {
+      try {
+        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedPortObj), { merge: true });
+        markSynced();
+      } catch (err: any) {
+        if (!isQuotaError(err)) console.warn('Notice updating portfolio item in Firestore:', err?.message);
+        markSynced();
+      }
+    } else {
+      markSynced();
+    }
+  };
+
+  const deletePortfolioItem = async (id: string): Promise<void> => {
+    if (!user) throw new Error('User not authenticated');
+    markSyncing();
+
+    const updated = portfolioItems.filter(item => item.id !== id);
+    setPortfolioItems(updated);
+    setLocalData(getCacheKey('portfolio'), updated);
+
+    if (!user.isDemo) {
+      try {
+        await deleteDoc(doc(db, 'users', user.uid, 'portfolio_items', id));
+      } catch (err: any) {
+        console.warn('Notice deleting portfolio item in Firestore:', err?.message);
+      }
+    }
+    markSynced();
+  };
+
+  // ----------------------------------------------------
   // Community Operations
+  // ----------------------------------------------------
   const addCommunityPost = async (
     content: string, 
     tags: string[], 
@@ -1114,8 +951,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sharedItem?: SharedItemPayload
   ): Promise<string> => {
     const newId = `post-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    
-    // Sanitize sharedItem to keep it lightweight (<200KB)
     const cleanSharedItem = sharedItem ? {
       ...sharedItem,
       materials: sharedItem.materials?.map(m => ({
@@ -1140,29 +975,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
     };
 
-    // 1. Immediately display locally (0ms)
     setCommunityPosts(prev => [newPost, ...prev]);
 
-    // 2. Persist to Express backend /api/community/posts (works 100% reliably for all students)
-    try {
-      await fetch('/api/community/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newPost),
-      });
-    } catch (err) {
-      console.warn('Server post error:', err);
-    }
+    // Express backend
+    fetch('/api/community/posts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newPost),
+    }).catch(() => {});
 
-    // 3. Persist to Firestore cloud in parallel
-    try {
-      const sanitized = sanitizeForFirestore(newPost);
-      setDoc(doc(db, 'community_posts', newId), sanitized).catch(err => {
-        console.warn('Firestore community post notice:', err?.message);
-      });
-    } catch (err) {
-      console.warn('Could not sync post to Firestore cloud:', err);
-    }
+    // Firestore
+    setDoc(doc(db, 'community_posts', newId), sanitizeForFirestore(newPost)).catch(() => {});
 
     return newId;
   };
@@ -1179,29 +1002,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? p.likedBy.filter(uid => uid !== currentUid)
         : [...p.likedBy, currentUid];
       updatedLikes = updatedLikedBy.length;
-      return {
-        ...p,
-        likedBy: updatedLikedBy,
-        likes: updatedLikes
-      };
+      return { ...p, likedBy: updatedLikedBy, likes: updatedLikes };
     }));
 
-    // Sync to Express backend API
     fetch(`/api/community/posts/${postId}/like`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uid: currentUid }),
-    }).catch(err => console.warn('Server like notice:', err));
+    }).catch(() => {});
 
-    // Sync to Firestore in parallel
-    try {
-      updateDoc(doc(db, 'community_posts', postId), {
-        likedBy: updatedLikedBy,
-        likes: updatedLikes
-      }).catch(() => {});
-    } catch (err) {
-      console.warn('Firestore like update notice:', err);
-    }
+    updateDoc(doc(db, 'community_posts', postId), {
+      likedBy: updatedLikedBy,
+      likes: updatedLikes
+    }).catch(() => {});
   };
 
   const addCommentToPost = async (postId: string, content: string) => {
@@ -1218,50 +1031,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     let updatedComments: PostComment[] = [];
-
     setCommunityPosts(prev => prev.map(p => {
       if (p.id !== postId) return p;
       updatedComments = [...(p.comments || []), newComment];
-      return {
-        ...p,
-        comments: updatedComments
-      };
+      return { ...p, comments: updatedComments };
     }));
 
-    // Sync to Express backend API
     fetch(`/api/community/posts/${postId}/comment`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newComment),
-    }).catch(err => console.warn('Server comment notice:', err));
+    }).catch(() => {});
 
-    // Sync to Firestore so all users see the comment
-    try {
-      const sanitizedComments = updatedComments.map(c => sanitizeForFirestore(c));
-      updateDoc(doc(db, 'community_posts', postId), {
-        comments: sanitizedComments
-      }).catch(() => {});
-    } catch (err) {
-      console.warn('Firestore comment update notice:', err);
-    }
+    updateDoc(doc(db, 'community_posts', postId), {
+      comments: updatedComments.map(c => sanitizeForFirestore(c))
+    }).catch(() => {});
   };
 
   const deleteCommunityPost = async (postId: string) => {
-    deletedPostIdsRef.current.add(postId);
     setCommunityPosts(prev => prev.filter(p => p.id !== postId));
-
-    fetch(`/api/community/posts/${postId}`, {
-      method: 'DELETE',
-    }).catch(err => console.warn('Server delete post notice:', err));
-
-    try {
-      deleteDoc(doc(db, 'community_posts', postId)).catch(() => {});
-    } catch (err) {
-      console.warn('Firestore delete post notice:', err);
-    }
+    fetch(`/api/community/posts/${postId}`, { method: 'DELETE' }).catch(() => {});
+    deleteDoc(doc(db, 'community_posts', postId)).catch(() => {});
   };
 
-  // Import Shared Item (Course or Material) directly into personal collection
+  // ----------------------------------------------------
+  // Import Shared Course or Material
+  // ----------------------------------------------------
   const importSharedItem = async (sharedItem: SharedItemPayload): Promise<{ success: boolean; message: string; courseId?: string }> => {
     if (!user) {
       return { success: false, message: 'กรุณาเข้าสู่ระบบก่อนทำการบันทึกวิชาหรือเอกสาร' };
@@ -1270,7 +1065,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     markSyncing();
     try {
       if (sharedItem.type === 'course') {
-        // Create new course
         const newCourseId = await addCourse({
           title: sharedItem.title,
           code: 'TCAS-SHARE',
@@ -1281,7 +1075,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           roomOrPlatform: 'คอร์สแชร์จากชุมชน',
         });
 
-        // Import all attached materials (files, YouTube clips, sheets, documents)
         if (Array.isArray(sharedItem.materials) && sharedItem.materials.length > 0) {
           for (let i = 0; i < sharedItem.materials.length; i++) {
             const mat = sharedItem.materials[i];
@@ -1308,14 +1101,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           courseId: newCourseId 
         };
       } else {
-        // Material import
-        // Find if user already has a course matching category
         let targetCourseId = courses.find(c => 
           (sharedItem.category && c.category === sharedItem.category) ||
           c.title.toLowerCase().includes(sharedItem.title.toLowerCase().slice(0, 5))
         )?.id;
 
-        // If no matching course, create a dedicated Shared Materials course
         if (!targetCourseId) {
           targetCourseId = await addCourse({
             title: sharedItem.courseTitle || (sharedItem.category ? `วิชา ${sharedItem.category}` : 'คลังเอกสาร & ชีทจากชุมชน'),
@@ -1347,109 +1137,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Portfolio CRUD actions
-  const addPortfolioItem = async (itemData: Omit<PortfolioItem, 'id' | 'createdAt'>) => {
-    if (!user) throw new Error('User not authenticated');
-    markSyncing();
-    const newId = 'port_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-    const newItem: PortfolioItem = {
-      ...itemData,
-      id: newId,
-      userId: user.uid,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const updated = [newItem, ...portfolioItems];
-    setPortfolioItems(updated);
-    setLocalData(localPortKey, updated);
-
-    if (!user.isDemo) {
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', newId), newItem);
-      } catch (err: any) {
-        if (!isQuotaError(err)) {
-          console.warn('Notice saving portfolio item to Firestore:', err?.message);
-        }
-      }
-    }
-    markSynced();
-    return newId;
-  };
-
-  const updatePortfolioItem = async (id: string, data: Partial<PortfolioItem>) => {
-    if (!user) throw new Error('User not authenticated');
-    markSyncing();
-    const nowIso = new Date().toISOString();
-    const updatedFields = { ...data, updatedAt: nowIso };
-
-    setPortfolioItems(prev => {
-      const idx = prev.findIndex(p => p.id === id);
-      if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = { ...next[idx], ...updatedFields };
-        return next;
-      }
-      return prev;
-    });
-
-    const currentCached = getLocalData<PortfolioItem[]>(localPortKey, []);
-    const cachedIdx = currentCached.findIndex(p => p.id === id);
-    let updatedPortObj: PortfolioItem;
-    if (cachedIdx >= 0) {
-      updatedPortObj = { ...currentCached[cachedIdx], ...updatedFields };
-      currentCached[cachedIdx] = updatedPortObj;
-    } else {
-      const fromState = portfolioItems.find(p => p.id === id);
-      updatedPortObj = fromState 
-        ? { ...fromState, ...updatedFields } 
-        : ({ id, ...updatedFields } as PortfolioItem);
-      currentCached.push(updatedPortObj);
-    }
-    setLocalData(localPortKey, currentCached);
-
-    if (!user.isDemo) {
-      try {
-        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedPortObj), { merge: true });
-        markSynced();
-      } catch (err: any) {
-        if (!isQuotaError(err)) {
-          console.warn('Notice updating portfolio item in Firestore:', err?.message);
-        }
-        markSynced();
-      }
-    } else {
-      markSynced();
-    }
-  };
-
-  const deletePortfolioItem = async (id: string) => {
-    if (!user) throw new Error('User not authenticated');
-    markSyncing();
-    markItemAsDeleted(id);
-    const updated = portfolioItems.filter(item => item.id !== id);
-    setPortfolioItems(updated);
-    setLocalData(localPortKey, updated);
-
-    if (!user.isDemo) {
-      try {
-        await deleteDoc(doc(db, 'users', user.uid, 'portfolio_items', id));
-      } catch {
-        try {
-          await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), { _deleted: true, isDeleted: true }, { merge: true });
-        } catch {}
-      }
-    }
-    markSynced();
-  };
-
-  // Private share link creation with short 6-character code (optimized for instant 0ms generation)
+  // ----------------------------------------------------
+  // Share Links
+  // ----------------------------------------------------
   const createPrivateShareLink = async (
     payload: SharedItemPayload, 
     note?: string,
     presetCode?: string
   ): Promise<{ url: string; shareCode: string; shareId: string }> => {
-    // Generate or use preset sleek, memorable 6-char share code e.g. LM-8K39
     let shareCode = presetCode ? presetCode.toUpperCase().trim() : '';
     if (!shareCode) {
       const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
@@ -1465,13 +1160,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : shareCode;
     const shareId = 'shr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
-    // Sanitize payload to keep it ultra-lightweight (<200KB) for instant network transport and Firestore 1MB limits
     const lightweightPayload: SharedItemPayload = {
       ...payload,
       fileData: payload.fileData && payload.fileData.length < 250000 ? payload.fileData : undefined,
       materials: payload.materials?.map(m => ({
         ...m,
-        // If file data exceeds 150KB, omit heavy base64 so upload and download are blazing fast
         fileData: m.fileData && m.fileData.length < 150000 ? m.fileData : undefined,
       }))
     };
@@ -1488,40 +1181,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
     };
 
-    // 1. Instant local storage cache under all alias keys (0ms access)
-    const suffixOnly = cleanCode.startsWith('LM') && cleanCode.length === 6 ? cleanCode.substring(2) : '';
+    // Cache locally
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
     localShares[shareCode] = record;
     localShares[cleanCode] = record;
     localShares[formattedCode] = record;
     localShares[shareId] = record;
-    if (suffixOnly) {
-      localShares[suffixOnly] = record;
-    }
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Express backend /api/shared-links (100% reliable for cross-device sharing)
-    try {
-      fetch('/api/shared-links', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          shareCode: formattedCode,
-          cleanCode,
-          shareId,
-          payload: lightweightPayload,
-          authorName: profile?.displayName || user?.displayName || 'เพื่อนเด็กติว Lukmoo',
-          authorId: user ? user.uid : 'anonymous',
-          note: note || '',
-        }),
-      }).catch(err => console.warn('Server shared link save notice:', err));
-    } catch {}
+    // Express backend
+    fetch('/api/shared-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shareCode: formattedCode,
+        cleanCode,
+        shareId,
+        payload: lightweightPayload,
+        authorName: profile?.displayName || user?.displayName || 'เพื่อนเด็กติว Lukmoo',
+        authorId: user ? user.uid : 'anonymous',
+        note: note || '',
+      }),
+    }).catch(() => {});
 
-    // 3. Persist to Firestore cleanCode document in background (single write to minimize quota usage)
-    const sanitized = sanitizeForFirestore(record);
-    setDoc(doc(db, 'shared_links', cleanCode), sanitized).catch((e) => {
-      console.warn('Firestore shared_links save notice:', e?.message);
-    });
+    // Firestore
+    setDoc(doc(db, 'shared_links', cleanCode), sanitizeForFirestore(record)).catch(() => {});
 
     const encoded = encodeSharedPayload(lightweightPayload);
     const baseUrl = window.location.origin + window.location.pathname;
@@ -1529,19 +1213,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? `${baseUrl}#code=${formattedCode}&import=${encoded}`
       : `${baseUrl}?code=${formattedCode}`;
 
-    return {
-      url: shareUrl,
-      shareCode: formattedCode,
-      shareId,
-    };
+    return { url: shareUrl, shareCode: formattedCode, shareId };
   };
 
   const resolvePrivateShare = async (shareCodeOrQuery?: string, shareId?: string): Promise<SharedItemPayload | null> => {
     if (!shareCodeOrQuery && !shareId) return null;
-
     let queryStr = (shareCodeOrQuery || shareId || '').trim();
 
-    // 0. Immediate decode if input contains self-contained payload (0ms, 100% reliable, no server quota needed)
     if (queryStr.includes('import=')) {
       const match = queryStr.match(/import=([A-Za-z0-9+/=%_-]+)/i);
       if (match) {
@@ -1554,7 +1232,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (decoded && decoded.title) return decoded;
     }
 
-    // 1. Intelligently extract code from Thai invite message, Line message, or raw text
     const lmRegexMatch = queryStr.match(/LM-?[A-Z0-9]{4}/i);
     if (lmRegexMatch) {
       queryStr = lmRegexMatch[0];
@@ -1579,11 +1256,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                    urlObj.searchParams.get('share_id') || 
                    queryStr;
       } catch {}
-    } else {
-      const fourMatch = queryStr.match(/\b([A-Z0-9]{4})\b/i);
-      if (fourMatch && queryStr.length > 4) {
-        queryStr = fourMatch[1];
-      }
     }
 
     const upper = queryStr.toUpperCase().replace(/[^A-Z0-9-]/g, '');
@@ -1591,10 +1263,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const formattedHyphen = upper.includes('-') 
       ? upper 
       : (upper.startsWith('LM') && upper.length === 6 ? `LM-${upper.substring(2)}` : upper);
-
-    const withLm = cleanNoHyphen.length === 4 ? `LM${cleanNoHyphen}` : '';
-    const withLmHyphen = cleanNoHyphen.length === 4 ? `LM-${cleanNoHyphen}` : '';
-    const suffixOnly = cleanNoHyphen.startsWith('LM') && cleanNoHyphen.length === 6 ? cleanNoHyphen.substring(2) : '';
 
     const parseDocPayload = (data: any): SharedItemPayload | null => {
       if (!data) return null;
@@ -1609,23 +1277,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return null;
     };
 
-    // 2. Check local cache (instant 0ms)
+    // 1. Local Cache
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
-    const localFound = localShares[queryStr] || 
-                       localShares[upper] || 
-                       localShares[cleanNoHyphen] || 
-                       localShares[formattedHyphen] || 
-                       (withLm ? localShares[withLm] : null) ||
-                       (withLmHyphen ? localShares[withLmHyphen] : null) ||
-                       (suffixOnly ? localShares[suffixOnly] : null) ||
-                       (shareId ? localShares[shareId] : null);
-
+    const localFound = localShares[queryStr] || localShares[upper] || localShares[cleanNoHyphen] || localShares[formattedHyphen];
     if (localFound) {
       const parsedLocal = parseDocPayload(localFound);
       if (parsedLocal) return parsedLocal;
     }
 
-    // 2.5 Check Express backend /api/shared-links/:code (reliable across all browsers and devices)
+    // 2. Express Backend
     try {
       for (const k of [formattedHyphen, cleanNoHyphen, upper, queryStr]) {
         if (!k) continue;
@@ -1633,107 +1293,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.ok) {
           const serverData = await res.json();
           const parsed = parseDocPayload(serverData);
-          if (parsed) {
-            localShares[k] = serverData;
-            setLocalData('lukmoo_private_shares', localShares);
-            return parsed;
-          }
+          if (parsed) return parsed;
         }
       }
     } catch {}
 
-    // 3. Check Firestore collection 'shared_links' by Document ID in parallel
-    const lookupKeys = Array.from(new Set([
-      cleanNoHyphen, 
-      formattedHyphen, 
-      withLm,
-      withLmHyphen,
-      suffixOnly,
-      upper, 
-      queryStr, 
-      shareId
-    ].filter(Boolean))) as string[];
-
+    // 3. Firestore
     try {
-      const snaps = await Promise.all(
-        lookupKeys.map(k => getDoc(doc(db, 'shared_links', k)).catch(() => null))
-      );
-      for (let i = 0; i < snaps.length; i++) {
-        const snap = snaps[i];
+      for (const k of [cleanNoHyphen, formattedHyphen, upper, queryStr]) {
+        if (!k) continue;
+        const snap = await getDoc(doc(db, 'shared_links', k)).catch(() => null);
         if (snap && snap.exists()) {
-          const data = snap.data();
-          const parsed = parseDocPayload(data);
-          if (parsed) {
-            localShares[lookupKeys[i]] = data;
-            setLocalData('lukmoo_private_shares', localShares);
-            return parsed;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Firestore parallel shared link fetch error:', err);
-    }
-
-    // 4. Fallback: Query Firestore by fields ('cleanCode' or 'shareCode')
-    try {
-      const searchTerms = Array.from(new Set([cleanNoHyphen, formattedHyphen, withLm, suffixOnly].filter(Boolean)));
-      if (searchTerms.length > 0) {
-        const qClean = query(collection(db, 'shared_links'), where('cleanCode', 'in', searchTerms.slice(0, 10)));
-        const snapClean = await getDocs(qClean).catch(() => null);
-        if (snapClean && !snapClean.empty) {
-          const parsed = parseDocPayload(snapClean.docs[0].data());
+          const parsed = parseDocPayload(snap.data());
           if (parsed) return parsed;
-        }
-
-        const qShare = query(collection(db, 'shared_links'), where('shareCode', 'in', searchTerms.slice(0, 10)));
-        const snapShare = await getDocs(qShare).catch(() => null);
-        if (snapShare && !snapShare.empty) {
-          const parsed = parseDocPayload(snapShare.docs[0].data());
-          if (parsed) return parsed;
-        }
-      }
-    } catch (err) {
-      console.warn('Firestore field query error:', err);
-    }
-
-    // 5. Check community_posts collection as fallback (in case user pasted a community post ID or reference)
-    try {
-      for (const k of lookupKeys.slice(0, 3)) {
-        const postSnap = await getDoc(doc(db, 'community_posts', k)).catch(() => null);
-        if (postSnap && postSnap.exists()) {
-          const postData = postSnap.data();
-          if (postData?.sharedItem && postData.sharedItem.title) {
-            return postData.sharedItem as SharedItemPayload;
-          }
         }
       }
     } catch {}
-
-    // 6. Backward compatibility: Base64 decode for older long share codes
-    if (queryStr.length > 25) {
-      try {
-        const decoded = decodeURIComponent(
-          Array.prototype.map.call(atob(decodeURIComponent(queryStr)), (c: string) => {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-          }).join('')
-        );
-        const parsed = JSON.parse(decoded);
-        if (parsed && parsed.title) {
-          return {
-            ...parsed,
-            type: parsed.type || 'course',
-          } as SharedItemPayload;
-        }
-      } catch {}
-    }
 
     return null;
   };
 
-  // Export / Import
+  // ----------------------------------------------------
+  // Backup Export / Import & Direct Cloud Sync
+  // ----------------------------------------------------
   const exportBackupData = (): string => {
     const backup = {
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString(),
       userUid: user?.uid,
       courses,
@@ -1788,45 +1373,48 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || user.isDemo) return;
     markSyncing();
     try {
-      // 1. Sync collections
-      const cachedCourses = getLocalData<Course[]>(localCourseKey, []);
-      for (const c of cachedCourses) {
-        await setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true });
-      }
+      // Direct pull from Firestore server to ensure 100% cloud parity
+      const [coursesSnap, matsSnap, evsSnap, portSnap] = await Promise.all([
+        getDocs(collection(db, 'users', user.uid, 'courses')),
+        getDocs(collection(db, 'users', user.uid, 'materials')),
+        getDocs(collection(db, 'users', user.uid, 'events')),
+        getDocs(collection(db, 'users', user.uid, 'portfolio_items')),
+      ]);
 
-      const cachedMaterials = getLocalData<CourseMaterial[]>(localMatKey, []);
-      for (const m of cachedMaterials) {
-        await setDoc(doc(db, 'users', user.uid, 'materials', m.id), sanitizeForFirestore(m), { merge: true });
-      }
+      const cloudCourses = coursesSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as any))
+        .filter(c => !c._deleted && !c.isDeleted) as Course[];
+      cloudCourses.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
 
-      const cachedEvents = getLocalData<CalendarEvent[]>(localEvKey, []);
-      for (const e of cachedEvents) {
-        await setDoc(doc(db, 'users', user.uid, 'events', e.id), sanitizeForFirestore(e), { merge: true });
-      }
+      const cloudMats = matsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as any))
+        .filter(m => !m._deleted && !m.isDeleted) as CourseMaterial[];
+      cloudMats.sort((a, b) => ((a.orderIndex ?? 0) - (b.orderIndex ?? 0)) || ((a.createdAt || '').localeCompare(b.createdAt || '')));
 
-      const cachedPortfolio = getLocalData<PortfolioItem[]>(localPortKey, []);
-      for (const p of cachedPortfolio) {
-        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', p.id), sanitizeForFirestore(p), { merge: true });
-      }
+      const cloudEvs = evsSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as any))
+        .filter(e => !e._deleted && !e.isDeleted) as CalendarEvent[];
+      cloudEvs.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-      // 2. Sync Profile / Settings
-      const profileRef = doc(db, 'users', user.uid);
-      await updateDoc(profileRef, {
-        tcasCompletedIds,
-        hiddenTcasIds,
-        showPinnedTCAS,
-        updatedAt: new Date().toISOString(),
-      });
+      const cloudPort = portSnap.docs
+        .map(d => ({ id: d.id, ...d.data() } as any))
+        .filter(p => !p._deleted && !p.isDeleted) as PortfolioItem[];
+      cloudPort.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+      setCourses(cloudCourses);
+      setMaterials(cloudMats);
+      setEvents(cloudEvs);
+      setPortfolioItems(cloudPort);
+
+      setLocalData(getCacheKey('courses'), cloudCourses);
+      setLocalData(getCacheKey('materials'), cloudMats);
+      setLocalData(getCacheKey('events'), cloudEvs);
+      setLocalData(getCacheKey('portfolio'), cloudPort);
 
       markSynced();
     } catch (err: any) {
-      if (isQuotaError(err)) {
-        console.info('Cloud Firestore daily quota limit reached; data is fully saved locally on your device.');
-        markSynced();
-      } else {
-        console.warn('Manual sync notice:', err?.message);
-        markSynced();
-      }
+      console.warn('Manual cloud sync notice:', err?.message);
+      markSynced();
     }
   };
 

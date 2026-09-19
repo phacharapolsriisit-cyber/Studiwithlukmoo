@@ -7,8 +7,6 @@ import {
   setDoc, 
   updateDoc, 
   deleteDoc, 
-  query, 
-  where,
   getDocs,
   onSnapshot,
   writeBatch
@@ -56,7 +54,7 @@ export function isQuotaError(err: any): boolean {
          msg.includes('maximum backoff delay');
 }
 
-// LocalStorage helpers for offline or fast hydration
+// LocalStorage helpers
 export const getLocalData = <T,>(key: string, fallback: T): T => {
   try {
     const raw = localStorage.getItem(key);
@@ -72,7 +70,7 @@ export const setLocalData = <T,>(key: string, data: T) => {
   } catch {}
 };
 
-// Compact URL / Base64 encoding for reliable 1-click sharing
+// Compact URL / Base64 encoding for sharing
 export function encodeSharedPayload(payload: SharedItemPayload): string {
   try {
     const compact = {
@@ -193,31 +191,34 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, markSyncing, markSynced, markSyncError } = useAuth();
 
-  // Helper to determine active local storage prefix
-  const getCacheKey = useCallback((sub: string) => {
-    const uid = user?.uid || 'guest';
-    return `lukmoo_cache_${uid}_${sub}`;
+  // Active user ID helper
+  const getUid = useCallback(() => {
+    return user?.uid || 'guest';
   }, [user?.uid]);
 
-  // Main state - initialize from local cache for instant UI rendering
+  const getCacheKey = useCallback((sub: string) => {
+    return `lukmoo_cache_${getUid()}_${sub}`;
+  }, [getUid]);
+
+  // Initial State: Load from cache immediately for 0ms render
   const [courses, setCourses] = useState<Course[]>(() => {
-    if (!user) return [];
-    return getLocalData<Course[]>(`lukmoo_cache_${user.uid}_courses`, []);
+    const uid = user?.uid || 'guest';
+    return getLocalData<Course[]>(`lukmoo_cache_${uid}_courses`, []);
   });
 
   const [materials, setMaterials] = useState<CourseMaterial[]>(() => {
-    if (!user) return [];
-    return getLocalData<CourseMaterial[]>(`lukmoo_cache_${user.uid}_materials`, []);
+    const uid = user?.uid || 'guest';
+    return getLocalData<CourseMaterial[]>(`lukmoo_cache_${uid}_materials`, []);
   });
 
   const [events, setEvents] = useState<CalendarEvent[]>(() => {
-    if (!user) return [];
-    return getLocalData<CalendarEvent[]>(`lukmoo_cache_${user.uid}_events`, []);
+    const uid = user?.uid || 'guest';
+    return getLocalData<CalendarEvent[]>(`lukmoo_cache_${uid}_events`, []);
   });
 
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>(() => {
-    if (!user) return [];
-    return getLocalData<PortfolioItem[]>(`lukmoo_cache_${user.uid}_portfolio`, []);
+    const uid = user?.uid || 'guest';
+    return getLocalData<PortfolioItem[]>(`lukmoo_cache_${uid}_portfolio`, []);
   });
 
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>(() => {
@@ -289,38 +290,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const reorderMaterialsTimerRef = useRef<any>(null);
 
   // ----------------------------------------------------
-  // Real-time Firestore Synchronization Across Devices
+  // Sync Data on User Auth Change & Setup Firestore Listeners
   // ----------------------------------------------------
   useEffect(() => {
-    // 1. If not logged in, clear private user data immediately
-    if (!user) {
-      setCourses([]);
-      setMaterials([]);
-      setEvents([]);
-      setPortfolioItems([]);
-      setIsLoadingData(false);
-      return;
-    }
-
-    const uid = user.uid;
+    const uid = user?.uid || 'guest';
     const courseCacheKey = `lukmoo_cache_${uid}_courses`;
     const matCacheKey = `lukmoo_cache_${uid}_materials`;
     const evCacheKey = `lukmoo_cache_${uid}_events`;
     const portCacheKey = `lukmoo_cache_${uid}_portfolio`;
 
-    // 2. Instant cache hydration for current user
+    // 1. Instant cache hydration for current active user
     const cachedC = getLocalData<Course[]>(courseCacheKey, []);
     const cachedM = getLocalData<CourseMaterial[]>(matCacheKey, []);
     const cachedE = getLocalData<CalendarEvent[]>(evCacheKey, []);
     const cachedP = getLocalData<PortfolioItem[]>(portCacheKey, []);
 
-    if (cachedC.length > 0) setCourses(cachedC);
-    if (cachedM.length > 0) setMaterials(cachedM);
-    if (cachedE.length > 0) setEvents(cachedE);
-    if (cachedP.length > 0) setPortfolioItems(cachedP);
+    setCourses(cachedC);
+    setMaterials(cachedM);
+    setEvents(cachedE);
+    setPortfolioItems(cachedP);
 
-    // If demo user, no cloud listener needed
-    if (user.isDemo) {
+    if (!user || user.isDemo) {
       setIsLoadingData(false);
       markSynced();
       return;
@@ -329,7 +319,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoadingData(true);
     markSyncing();
 
-    // 3. Connect real-time Firestore listeners for active cloud user
+    // 2. Connect real-time Firestore listeners for authenticated cloud users
     let unsubCourses = () => {};
     let unsubMaterials = () => {};
     let unsubEvents = () => {};
@@ -337,7 +327,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let unsubProfile = () => {};
 
     try {
-      // Profile listener (TCAS settings, etc.)
+      // Profile listener
       const profileRef = doc(db, 'users', uid);
       unsubProfile = onSnapshot(profileRef, (snap) => {
         if (snap.exists()) {
@@ -466,7 +456,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   // ----------------------------------------------------
-  // Community Feed Sync (Shared across all users)
+  // Community Feed Sync
   // ----------------------------------------------------
   useEffect(() => {
     let isMounted = true;
@@ -517,7 +507,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // CRUD: Course Actions
   // ----------------------------------------------------
   const addCourse = async (courseData: Omit<Course, 'id' | 'createdAt' | 'orderIndex'>): Promise<string> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'crs_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
     const nowIso = new Date().toISOString();
@@ -529,13 +518,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: nowIso,
     };
 
-    // 1. Instant local update
-    const updated = [...courses, newCourse];
-    setCourses(updated);
-    setLocalData(getCacheKey('courses'), updated);
+    // 1. Instant local update with atomic setter
+    setCourses(prev => {
+      const updated = [...prev, newCourse];
+      setLocalData(getCacheKey('courses'), updated);
+      return updated;
+    });
 
-    // 2. Persist to Firestore Cloud
-    if (!user.isDemo) {
+    // 2. Persist to Firestore Cloud if authenticated
+    if (user && !user.isDemo) {
       try {
         const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
         await setDoc(courseDocRef, sanitizeForFirestore(newCourse));
@@ -551,27 +542,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateCourse = async (id: string, data: Partial<Course>): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
     let updatedCourseObj: Course | null = null;
-    const updatedList = courses.map(c => {
-      if (c.id === id) {
-        updatedCourseObj = { ...c, ...updatedFields };
-        return updatedCourseObj;
-      }
-      return c;
+    setCourses(prev => {
+      const updated = prev.map(c => {
+        if (c.id === id) {
+          updatedCourseObj = { ...c, ...updatedFields };
+          return updatedCourseObj;
+        }
+        return c;
+      });
+      setLocalData(getCacheKey('courses'), updated);
+      return updated;
     });
 
-    setCourses(updatedList);
-    setLocalData(getCacheKey('courses'), updatedList);
-
-    if (!user.isDemo && updatedCourseObj) {
+    if (user && !user.isDemo) {
       try {
         const courseRef = doc(db, 'users', user.uid, 'courses', id);
-        await setDoc(courseRef, sanitizeForFirestore(updatedCourseObj), { merge: true });
+        await setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true });
         markSynced();
       } catch (err: any) {
         if (!isQuotaError(err)) console.warn('Notice updating course in Firestore:', err?.message);
@@ -583,25 +574,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteCourse = async (id: string): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
-
     const relatedMatIds = materials.filter(m => m.courseId === id).map(m => m.id);
     const relatedEvIds = events.filter(e => e.courseId === id).map(e => e.id);
 
-    const updatedCourses = courses.filter(c => c.id !== id);
-    const updatedMats = materials.filter(m => m.courseId !== id);
-    const updatedEvs = events.filter(e => e.courseId !== id);
+    setCourses(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      setLocalData(getCacheKey('courses'), updated);
+      return updated;
+    });
+    setMaterials(prev => {
+      const updated = prev.filter(m => m.courseId !== id);
+      setLocalData(getCacheKey('materials'), updated);
+      return updated;
+    });
+    setEvents(prev => {
+      const updated = prev.filter(e => e.courseId !== id);
+      setLocalData(getCacheKey('events'), updated);
+      return updated;
+    });
 
-    setCourses(updatedCourses);
-    setMaterials(updatedMats);
-    setEvents(updatedEvs);
-
-    setLocalData(getCacheKey('courses'), updatedCourses);
-    setLocalData(getCacheKey('materials'), updatedMats);
-    setLocalData(getCacheKey('events'), updatedEvs);
-
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'courses', id));
         for (const mId of relatedMatIds) {
@@ -618,14 +611,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const reorderCourses = async (newOrderedList: Course[]): Promise<void> => {
-    if (!user) return;
     const nowIso = new Date().toISOString();
     const reindexed = newOrderedList.map((c, idx) => ({ ...c, orderIndex: idx, updatedAt: nowIso }));
 
     setCourses(reindexed);
     setLocalData(getCacheKey('courses'), reindexed);
 
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       if (reorderCoursesTimerRef.current) clearTimeout(reorderCoursesTimerRef.current);
       reorderCoursesTimerRef.current = setTimeout(async () => {
         try {
@@ -648,7 +640,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // CRUD: Material Actions
   // ----------------------------------------------------
   const addMaterial = async (materialData: Omit<CourseMaterial, 'id' | 'createdAt' | 'orderIndex'>): Promise<string> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'mat_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
     const nowIso = new Date().toISOString();
@@ -660,11 +651,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: nowIso,
     };
 
-    const updated = [...materials, newMaterial];
-    setMaterials(updated);
-    setLocalData(getCacheKey('materials'), updated);
+    setMaterials(prev => {
+      const updated = [...prev, newMaterial];
+      setLocalData(getCacheKey('materials'), updated);
+      return updated;
+    });
 
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         const matDocRef = doc(db, 'users', user.uid, 'materials', newId);
         await setDoc(matDocRef, sanitizeForFirestore(newMaterial));
@@ -680,27 +673,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateMaterial = async (id: string, data: Partial<CourseMaterial>): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    let updatedMatObj: CourseMaterial | null = null;
-    const updatedList = materials.map(m => {
-      if (m.id === id) {
-        updatedMatObj = { ...m, ...updatedFields };
-        return updatedMatObj;
-      }
-      return m;
+    setMaterials(prev => {
+      const updated = prev.map(m => m.id === id ? { ...m, ...updatedFields } : m);
+      setLocalData(getCacheKey('materials'), updated);
+      return updated;
     });
 
-    setMaterials(updatedList);
-    setLocalData(getCacheKey('materials'), updatedList);
-
-    if (!user.isDemo && updatedMatObj) {
+    if (user && !user.isDemo) {
       try {
         const matDocRef = doc(db, 'users', user.uid, 'materials', id);
-        await setDoc(matDocRef, sanitizeForFirestore(updatedMatObj), { merge: true });
+        await setDoc(matDocRef, sanitizeForFirestore(updatedFields), { merge: true });
         markSynced();
       } catch (err: any) {
         if (!isQuotaError(err)) console.warn('Notice updating material in Firestore:', err?.message);
@@ -712,14 +698,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteMaterial = async (id: string): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
+    setMaterials(prev => {
+      const updated = prev.filter(m => m.id !== id);
+      setLocalData(getCacheKey('materials'), updated);
+      return updated;
+    });
 
-    const updated = materials.filter(m => m.id !== id);
-    setMaterials(updated);
-    setLocalData(getCacheKey('materials'), updated);
-
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'materials', id));
       } catch (err: any) {
@@ -734,7 +720,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const reorderMaterials = async (courseId: string, newOrderedList: CourseMaterial[]): Promise<void> => {
-    if (!user) return;
     const nowIso = new Date().toISOString();
     const reindexedCourseItems = newOrderedList.map((m, idx) => ({ ...m, orderIndex: idx, updatedAt: nowIso }));
     const otherItems = materials.filter(m => m.courseId !== courseId);
@@ -743,7 +728,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMaterials(allMaterials);
     setLocalData(getCacheKey('materials'), allMaterials);
 
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       if (reorderMaterialsTimerRef.current) clearTimeout(reorderMaterialsTimerRef.current);
       reorderMaterialsTimerRef.current = setTimeout(async () => {
         try {
@@ -766,7 +751,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // CRUD: Event Actions
   // ----------------------------------------------------
   const addEvent = async (eventData: Omit<CalendarEvent, 'id' | 'createdAt'>): Promise<string> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'ev_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
     const nowIso = new Date().toISOString();
@@ -777,11 +761,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: nowIso,
     };
 
-    const updated = [...events, newEvent];
-    setEvents(updated);
-    setLocalData(getCacheKey('events'), updated);
+    setEvents(prev => {
+      const updated = [...prev, newEvent];
+      setLocalData(getCacheKey('events'), updated);
+      return updated;
+    });
 
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         const evDocRef = doc(db, 'users', user.uid, 'events', newId);
         await setDoc(evDocRef, sanitizeForFirestore(newEvent));
@@ -801,27 +787,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.isCompleted !== undefined) toggleTCASCompleted(id);
       return;
     }
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    let updatedEvObj: CalendarEvent | null = null;
-    const updatedList = events.map(e => {
-      if (e.id === id) {
-        updatedEvObj = { ...e, ...updatedFields };
-        return updatedEvObj;
-      }
-      return e;
+    setEvents(prev => {
+      const updated = prev.map(e => e.id === id ? { ...e, ...updatedFields } : e);
+      setLocalData(getCacheKey('events'), updated);
+      return updated;
     });
 
-    setEvents(updatedList);
-    setLocalData(getCacheKey('events'), updatedList);
-
-    if (!user.isDemo && updatedEvObj) {
+    if (user && !user.isDemo) {
       try {
         const evDocRef = doc(db, 'users', user.uid, 'events', id);
-        await setDoc(evDocRef, sanitizeForFirestore(updatedEvObj), { merge: true });
+        await setDoc(evDocRef, sanitizeForFirestore(updatedFields), { merge: true });
         markSynced();
       } catch (err: any) {
         if (!isQuotaError(err)) console.warn('Notice updating event in Firestore:', err?.message);
@@ -837,14 +816,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       hideTCASEvent(id);
       return;
     }
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
+    setEvents(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      setLocalData(getCacheKey('events'), updated);
+      return updated;
+    });
 
-    const updated = events.filter(e => e.id !== id);
-    setEvents(updated);
-    setLocalData(getCacheKey('events'), updated);
-
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'events', id));
       } catch (err: any) {
@@ -866,22 +845,23 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // CRUD: Portfolio Actions
   // ----------------------------------------------------
   const addPortfolioItem = async (itemData: Omit<PortfolioItem, 'id' | 'createdAt'>): Promise<string> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const newId = 'port_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
     const newItem: PortfolioItem = {
       ...itemData,
       id: newId,
-      userId: user.uid,
+      userId: user?.uid || 'guest',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
-    const updated = [newItem, ...portfolioItems];
-    setPortfolioItems(updated);
-    setLocalData(getCacheKey('portfolio'), updated);
+    setPortfolioItems(prev => {
+      const updated = [newItem, ...prev];
+      setLocalData(getCacheKey('portfolio'), updated);
+      return updated;
+    });
 
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         await setDoc(doc(db, 'users', user.uid, 'portfolio_items', newId), sanitizeForFirestore(newItem));
       } catch (err: any) {
@@ -893,26 +873,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePortfolioItem = async (id: string, data: Partial<PortfolioItem>): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    let updatedPortObj: PortfolioItem | null = null;
-    const updatedList = portfolioItems.map(p => {
-      if (p.id === id) {
-        updatedPortObj = { ...p, ...updatedFields };
-        return updatedPortObj;
-      }
-      return p;
+    setPortfolioItems(prev => {
+      const updated = prev.map(p => p.id === id ? { ...p, ...updatedFields } : p);
+      setLocalData(getCacheKey('portfolio'), updated);
+      return updated;
     });
 
-    setPortfolioItems(updatedList);
-    setLocalData(getCacheKey('portfolio'), updatedList);
-
-    if (!user.isDemo && updatedPortObj) {
+    if (user && !user.isDemo) {
       try {
-        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedPortObj), { merge: true });
+        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedFields), { merge: true });
         markSynced();
       } catch (err: any) {
         if (!isQuotaError(err)) console.warn('Notice updating portfolio item in Firestore:', err?.message);
@@ -924,14 +897,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deletePortfolioItem = async (id: string): Promise<void> => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
+    setPortfolioItems(prev => {
+      const updated = prev.filter(item => item.id !== id);
+      setLocalData(getCacheKey('portfolio'), updated);
+      return updated;
+    });
 
-    const updated = portfolioItems.filter(item => item.id !== id);
-    setPortfolioItems(updated);
-    setLocalData(getCacheKey('portfolio'), updated);
-
-    if (!user.isDemo) {
+    if (user && !user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'portfolio_items', id));
       } catch (err: any) {
@@ -977,14 +950,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setCommunityPosts(prev => [newPost, ...prev]);
 
-    // Express backend
     fetch('/api/community/posts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newPost),
     }).catch(() => {});
 
-    // Firestore
     setDoc(doc(db, 'community_posts', newId), sanitizeForFirestore(newPost)).catch(() => {});
 
     return newId;
@@ -1058,10 +1029,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Import Shared Course or Material
   // ----------------------------------------------------
   const importSharedItem = async (sharedItem: SharedItemPayload): Promise<{ success: boolean; message: string; courseId?: string }> => {
-    if (!user) {
-      return { success: false, message: 'กรุณาเข้าสู่ระบบก่อนทำการบันทึกวิชาหรือเอกสาร' };
-    }
-
     markSyncing();
     try {
       if (sharedItem.type === 'course') {
@@ -1181,7 +1148,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
     };
 
-    // Cache locally
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
     localShares[shareCode] = record;
     localShares[cleanCode] = record;
@@ -1189,7 +1155,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localShares[shareId] = record;
     setLocalData('lukmoo_private_shares', localShares);
 
-    // Express backend
     fetch('/api/shared-links', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1204,7 +1169,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }),
     }).catch(() => {});
 
-    // Firestore
     setDoc(doc(db, 'shared_links', cleanCode), sanitizeForFirestore(record)).catch(() => {});
 
     const encoded = encodeSharedPayload(lightweightPayload);
@@ -1330,7 +1294,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const importBackupData = async (jsonData: string) => {
-    if (!user) throw new Error('User not authenticated');
     markSyncing();
     try {
       const parsed = JSON.parse(jsonData);
@@ -1373,7 +1336,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || user.isDemo) return;
     markSyncing();
     try {
-      // Direct pull from Firestore server to ensure 100% cloud parity
       const [coursesSnap, matsSnap, evsSnap, portSnap] = await Promise.all([
         getDocs(collection(db, 'users', user.uid, 'courses')),
         getDocs(collection(db, 'users', user.uid, 'materials')),

@@ -50,10 +50,42 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const DEMO_USER_KEY = 'lukmoo_demo_user_session';
+const AUTH_USER_CACHE_KEY = 'lukmoo_authenticated_user_session';
+const USER_PROFILE_CACHE_KEY = 'lukmoo_authenticated_user_profile';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AppUser | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<AppUser | null>(() => {
+    try {
+      const savedDemo = localStorage.getItem(DEMO_USER_KEY);
+      if (savedDemo) {
+        const parsed = JSON.parse(savedDemo);
+        if (parsed?.user) return parsed.user;
+      }
+      const savedAuth = localStorage.getItem(AUTH_USER_CACHE_KEY);
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+
+  const [profile, setProfile] = useState<UserProfile | null>(() => {
+    try {
+      const savedDemo = localStorage.getItem(DEMO_USER_KEY);
+      if (savedDemo) {
+        const parsed = JSON.parse(savedDemo);
+        if (parsed?.profile) return parsed.profile;
+      }
+      const savedProfile = localStorage.getItem(USER_PROFILE_CACHE_KEY);
+      if (savedProfile) {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed) return parsed;
+      }
+    } catch {}
+    return null;
+  });
+
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'local-only'>('synced');
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
@@ -92,7 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(parsed.user);
         setProfile(parsed.profile);
         setLoading(false);
-        return;
       } catch {
         localStorage.removeItem(DEMO_USER_KEY);
       }
@@ -103,14 +134,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .then(async (result) => {
         if (result?.user) {
           localStorage.removeItem(DEMO_USER_KEY);
-          setUser({
+          const appUser: AppUser = {
             uid: result.user.uid,
             email: result.user.email,
             displayName: result.user.displayName,
             photoURL: result.user.photoURL,
             isAnonymous: result.user.isAnonymous,
             isDemo: false,
-          });
+          };
+          localStorage.setItem(AUTH_USER_CACHE_KEY, JSON.stringify(appUser));
+          setUser(appUser);
           markSynced();
         }
       })
@@ -120,7 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 3. Listen to Firebase auth state
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      // If we have an active demo session, don't overwrite with null
+      // If we have an active demo session and no real currentUser, don't overwrite with null
       const currentDemo = localStorage.getItem(DEMO_USER_KEY);
       if (currentDemo && !currentUser) {
         setLoading(false);
@@ -130,20 +163,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentUser) {
         // Clear demo flag if real user logs in
         localStorage.removeItem(DEMO_USER_KEY);
-        setUser({
+        const appUser: AppUser = {
           uid: currentUser.uid,
           email: currentUser.email,
           displayName: currentUser.displayName,
           photoURL: currentUser.photoURL,
           isAnonymous: currentUser.isAnonymous,
           isDemo: false
-        });
+        };
+        localStorage.setItem(AUTH_USER_CACHE_KEY, JSON.stringify(appUser));
+        setUser(appUser);
 
         try {
           const userDocRef = doc(db, 'users', currentUser.uid);
           const docSnap = await getDoc(userDocRef);
           if (docSnap.exists()) {
-            setProfile(docSnap.data() as UserProfile);
+            const prof = docSnap.data() as UserProfile;
+            localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(prof));
+            setProfile(prof);
           } else {
             // First time user registration in firestore
             const newProfile: UserProfile = {
@@ -159,25 +196,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               updatedAt: new Date().toISOString(),
             };
             await setDoc(userDocRef, newProfile);
+            localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(newProfile));
             setProfile(newProfile);
           }
           markSynced();
-        } catch (err: any) {
-          // If firestore fails (e.g. offline or rules), fallback to basic profile
-          setProfile({
-            uid: currentUser.uid,
-            email: currentUser.email,
-            displayName: currentUser.displayName || 'นักเรียน',
-            photoURL: currentUser.photoURL || '',
-            bio: 'มุ่งมั่นเตรียมสอบและเก็บเนื้อหาคอร์สติว',
-            schoolOrUniv: '',
-            targetExam: 'TCAS / A-Level',
-            studyGoalHours: 15,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
+        } catch {
+          // If firestore fails (e.g. offline or rules), fallback to cached or basic profile
+          const cachedProfileStr = localStorage.getItem(USER_PROFILE_CACHE_KEY);
+          if (cachedProfileStr) {
+            try {
+              setProfile(JSON.parse(cachedProfileStr));
+            } catch {}
+          } else {
+            const fallbackProfile: UserProfile = {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              displayName: currentUser.displayName || 'นักเรียน',
+              photoURL: currentUser.photoURL || '',
+              bio: 'มุ่งมั่นเตรียมสอบและเก็บเนื้อหาคอร์สติว',
+              schoolOrUniv: '',
+              targetExam: 'TCAS / A-Level',
+              studyGoalHours: 15,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(fallbackProfile));
+            setProfile(fallbackProfile);
+          }
+          markSynced();
         }
       } else {
+        localStorage.removeItem(AUTH_USER_CACHE_KEY);
+        localStorage.removeItem(USER_PROFILE_CACHE_KEY);
         setUser(null);
         setProfile(null);
       }
@@ -325,15 +375,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Instant Demo Student Login (allows testing when email/password is not yet toggled on or popups are blocked)
   const loginAsDemo = async (name?: string) => {
     markSyncing();
-    // Try anonymous login first if enabled in Firebase
-    let uid = 'demo_student_' + Math.random().toString(36).substring(2, 9);
-    try {
-      const anonRes = await signInAnonymously(auth);
-      if (anonRes?.user) {
-        uid = anonRes.user.uid;
+    // Maintain a stable demo uid so demo users never lose their data across demo logins or page refreshes
+    let uid = 'demo_student_user';
+    const existingDemo = localStorage.getItem(DEMO_USER_KEY);
+    if (existingDemo) {
+      try {
+        const parsed = JSON.parse(existingDemo);
+        if (parsed?.user?.uid) uid = parsed.user.uid;
+      } catch {}
+    } else {
+      try {
+        const anonRes = await signInAnonymously(auth);
+        if (anonRes?.user) {
+          uid = anonRes.user.uid;
+        }
+      } catch {
+        // Anonymous might also be disabled in Firebase console, use custom demo uid
       }
-    } catch {
-      // Anonymous might also be disabled in Firebase console, use custom demo uid
     }
 
     const demoUser: AppUser = {
@@ -368,11 +426,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       localStorage.removeItem(DEMO_USER_KEY);
+      localStorage.removeItem(AUTH_USER_CACHE_KEY);
+      localStorage.removeItem(USER_PROFILE_CACHE_KEY);
       await signOut(auth);
       setUser(null);
       setProfile(null);
       markSynced();
     } catch (error) {
+      localStorage.removeItem(DEMO_USER_KEY);
+      localStorage.removeItem(AUTH_USER_CACHE_KEY);
+      localStorage.removeItem(USER_PROFILE_CACHE_KEY);
       setUser(null);
       setProfile(null);
     }
@@ -395,6 +458,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(updated));
       const userRef = doc(db, 'users', user.uid);
       await setDoc(userRef, updated, { merge: true });
       setProfile(updated);
@@ -406,7 +470,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       // Fallback local update
       if (profile) {
-        setProfile({ ...profile, ...data, updatedAt: new Date().toISOString() });
+        const updated = { ...profile, ...data, updatedAt: new Date().toISOString() };
+        localStorage.setItem(USER_PROFILE_CACHE_KEY, JSON.stringify(updated));
+        setProfile(updated);
       }
       markSynced();
     }

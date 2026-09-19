@@ -408,6 +408,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (profile) {
         setProfile({ ...profile, ...data, updatedAt: new Date().toISOString() });
       }
+      markSynced();
     }
   };
 

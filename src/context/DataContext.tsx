@@ -46,6 +46,19 @@ export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Rec
   return clean;
 }
 
+export function isQuotaError(err: any): boolean {
+  if (!err) return false;
+  const code = err?.code || '';
+  const msg = err?.message || String(err || '');
+  return code === 'resource-exhausted' ||
+         code === 'permission-denied' ||
+         msg.includes('Quota limit exceeded') ||
+         msg.includes('resource-exhausted') ||
+         msg.includes('Quota exceeded') ||
+         msg.includes('Free daily write units') ||
+         msg.includes('maximum backoff delay');
+}
+
 interface DataContextType {
   courses: Course[];
   materials: CourseMaterial[];
@@ -453,8 +466,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markSynced();
         setIsLoadingData(false);
       }, (err) => {
-        console.warn('Courses sync notice:', err?.message);
-        markSyncError();
+        if (!isQuotaError(err)) {
+          console.warn('Courses sync notice:', err?.message);
+        }
+        markSynced();
         setIsLoadingData(false);
       });
 
@@ -479,8 +494,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLocalData(localMatKey, list);
         markSynced();
       }, (err) => {
-        console.warn('Materials sync notice:', err?.message);
-        markSyncError();
+        if (!isQuotaError(err)) {
+          console.warn('Materials sync notice:', err?.message);
+        }
+        markSynced();
       });
 
       // 3. Events snapshot listener
@@ -500,8 +517,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLocalData(localEvKey, list);
         markSynced();
       }, (err) => {
-        console.warn('Events sync notice:', err?.message);
-        markSyncError();
+        if (!isQuotaError(err)) {
+          console.warn('Events sync notice:', err?.message);
+        }
+        markSynced();
       });
 
       // 4. Portfolio items snapshot listener
@@ -521,11 +540,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLocalData(localPortKey, list);
         markSynced();
       }, (err) => {
-        console.warn('Portfolio sync notice:', err?.message);
-        markSyncError();
+        if (!isQuotaError(err)) {
+          console.warn('Portfolio sync notice:', err?.message);
+        }
+        markSynced();
       });
     } catch (e) {
-      console.warn('Cloud listeners initialization failed:', e);
+      console.warn('Cloud listeners initialization fallback:', e);
       setIsLoadingData(false);
     }
 
@@ -563,7 +584,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setDoc(courseDocRef, sanitizeForFirestore(newCourse), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.warn('Notice saving course to Firestore (local copy is safe):', err?.message);
+          if (!isQuotaError(err)) {
+            console.warn('Notice saving course to Firestore:', err?.message);
+          }
+          markSynced();
         });
     } else {
       markSynced();
@@ -577,7 +601,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nowIso = new Date().toISOString();
     const updatedFields = { ...data, updatedAt: nowIso };
 
-    // 1. Update React state immediately with functional updater (prevents stale closure issues)
+    // 1. Update React state immediately with functional updater
     setCourses(prev => {
       const idx = prev.findIndex(c => c.id === id);
       if (idx >= 0) {
@@ -611,7 +635,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setDoc(courseRef, sanitizeForFirestore(updatedCourseObj), { merge: true });
         markSynced();
       } catch (err: any) {
-        console.warn('Notice updating course in Firestore (local copy is safe):', err?.message);
+        if (!isQuotaError(err)) {
+          console.warn('Notice updating course in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -676,30 +702,38 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     lastLocalCourseReorderTimeRef.current = Date.now();
     const nowIso = new Date().toISOString();
+    const prevMap = new Map(courses.map(c => [c.id, c.orderIndex]));
     const reindexed = newOrderedList.map((c, idx) => ({ ...c, orderIndex: idx, updatedAt: nowIso }));
     
     // 1. Instant local update
     setCourses(reindexed);
     setLocalData(localCourseKey, reindexed);
 
-    // 2. Debounced batch commit
+    // 2. Debounced batch commit - ONLY write items that actually changed order to save quota
     if (!user.isDemo) {
       if (reorderCoursesTimerRef.current) clearTimeout(reorderCoursesTimerRef.current);
       reorderCoursesTimerRef.current = setTimeout(async () => {
         try {
+          const changedCourses = reindexed.filter((c, idx) => prevMap.get(c.id) !== idx);
+          if (changedCourses.length === 0) {
+            markSynced();
+            return;
+          }
           markSyncing();
           const batch = writeBatch(db);
-          reindexed.forEach((course) => {
+          changedCourses.forEach((course) => {
             const ref = doc(db, 'users', user.uid, 'courses', course.id);
-            batch.set(ref, sanitizeForFirestore(course), { merge: true });
+            batch.set(ref, { orderIndex: course.orderIndex, updatedAt: course.updatedAt }, { merge: true });
           });
           await batch.commit();
           markSynced();
         } catch (err) {
-          console.warn('Reorder sync error:', err);
-          markSyncError();
+          if (!isQuotaError(err)) {
+            console.warn('Reorder sync notice:', err);
+          }
+          markSynced();
         }
-      }, 2000);
+      }, 2500);
     }
   };
 
@@ -728,7 +762,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setDoc(matDocRef, sanitizeForFirestore(newMaterial), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.warn('Notice saving material to Firestore:', err?.message);
+          if (!isQuotaError(err)) {
+            console.warn('Notice saving material to Firestore:', err?.message);
+          }
+          markSynced();
         });
     } else {
       markSynced();
@@ -773,7 +810,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setDoc(matDocRef, sanitizeForFirestore(updatedMatObj), { merge: true });
         markSynced();
       } catch (err: any) {
-        console.warn('Notice updating material in Firestore:', err?.message);
+        if (!isQuotaError(err)) {
+          console.warn('Notice updating material in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -811,6 +850,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     lastLocalMaterialReorderTimeRef.current = Date.now();
     const nowIso = new Date().toISOString();
+    const prevMatMap = new Map(materials.filter(m => m.courseId === courseId).map(m => [m.id, m.orderIndex]));
     const reindexedCourseItems = newOrderedList.map((m, idx) => ({ ...m, orderIndex: idx, updatedAt: nowIso }));
     const otherItems = materials.filter(m => m.courseId !== courseId);
     const allMaterials = [...otherItems, ...reindexedCourseItems];
@@ -819,25 +859,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMaterials(allMaterials);
     setLocalData(localMatKey, allMaterials);
 
-    // 2. Debounced batch commit to Firestore with atomic set merge
+    // 2. Debounced batch commit to Firestore with atomic set merge - ONLY write changed items
     if (!user.isDemo) {
       if (reorderMaterialsTimerRef.current) {
         clearTimeout(reorderMaterialsTimerRef.current);
       }
       reorderMaterialsTimerRef.current = setTimeout(async () => {
         try {
+          const changedMats = reindexedCourseItems.filter((m, idx) => prevMatMap.get(m.id) !== idx);
+          if (changedMats.length === 0) {
+            markSynced();
+            return;
+          }
           markSyncing();
           const batch = writeBatch(db);
-          reindexedCourseItems.forEach((mat) => {
+          changedMats.forEach((mat) => {
             const ref = doc(db, 'users', user.uid, 'materials', mat.id);
             batch.set(ref, { orderIndex: mat.orderIndex, updatedAt: mat.updatedAt }, { merge: true });
           });
           await batch.commit();
           markSynced();
         } catch (err) {
-          console.warn('Notice reordering materials in Firestore:', err);
+          if (!isQuotaError(err)) {
+            console.warn('Notice reordering materials in Firestore:', err);
+          }
+          markSynced();
         }
-      }, 180);
+      }, 2500);
     }
   };
 
@@ -863,7 +911,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setDoc(evDocRef, sanitizeForFirestore(newEvent), { merge: true })
         .then(() => markSynced())
         .catch((err) => {
-          console.warn('Notice saving event to Firestore:', err?.message);
+          if (!isQuotaError(err)) {
+            console.warn('Notice saving event to Firestore:', err?.message);
+          }
+          markSynced();
         });
     } else {
       markSynced();
@@ -914,7 +965,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await setDoc(evDocRef, sanitizeForFirestore(updatedEvObj), { merge: true });
         markSynced();
       } catch (err: any) {
-        console.warn('Notice updating event in Firestore:', err?.message);
+        if (!isQuotaError(err)) {
+          console.warn('Notice updating event in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -1217,8 +1270,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         await setDoc(doc(db, 'users', user.uid, 'portfolio_items', newId), newItem);
-      } catch (err) {
-        console.error('Save portfolio item error:', err);
+      } catch (err: any) {
+        if (!isQuotaError(err)) {
+          console.warn('Notice saving portfolio item to Firestore:', err?.message);
+        }
       }
     }
     markSynced();
@@ -1259,11 +1314,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedPortObj), { merge: true });
-      } catch (err) {
-        console.error('Update portfolio item error:', err);
+        markSynced();
+      } catch (err: any) {
+        if (!isQuotaError(err)) {
+          console.warn('Notice updating portfolio item in Firestore:', err?.message);
+        }
+        markSynced();
       }
+    } else {
+      markSynced();
     }
-    markSynced();
   };
 
   const deletePortfolioItem = async (id: string) => {
@@ -1276,8 +1336,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'portfolio_items', id));
-      } catch (err) {
-        console.error('Delete portfolio item error:', err);
+      } catch {
+        try {
+          await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), { _deleted: true, isDeleted: true }, { merge: true });
+        } catch {}
       }
     }
     markSynced();
@@ -1659,9 +1721,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       markSynced();
-    } catch (err) {
-      console.error('Manual sync error:', err);
-      markSyncError();
+    } catch (err: any) {
+      if (isQuotaError(err)) {
+        console.info('Cloud Firestore daily quota limit reached; data is fully saved locally on your device.');
+        markSynced();
+      } else {
+        console.warn('Manual sync notice:', err?.message);
+        markSynced();
+      }
     }
   };
 

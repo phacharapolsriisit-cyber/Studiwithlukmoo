@@ -30,7 +30,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
     if (initialData) {
       setTitle(initialData.title);
       setCode(initialData.code || '');
-      setInstructor(initialData.instructor || '');
+      setInstructor(initialData.instructor === 'ไม่ระบุผู้สอน' ? '' : (initialData.instructor || ''));
       setCategory(initialData.category || 'math');
       setColor(initialData.color || '#2563eb');
       setDescription(initialData.description || '');

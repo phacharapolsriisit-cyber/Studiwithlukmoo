@@ -404,12 +404,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        // INTELLIGENT MERGE: Combine locally cached courses with cloud snapshot
-        // so that courses never disappear on refresh even if Firestore write quota is exhausted!
+        // INTELLIGENT TIMESTAMP-AWARE MERGE:
+        // Combine locally cached courses with cloud snapshot
+        // so that newer local edits (e.g. newly added tutor name, course rename)
+        // are NEVER overwritten by older snapshots!
         const existingLocal = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
         const mergedCourseMap = new Map<string, Course>();
         existingLocal.forEach(c => mergedCourseMap.set(c.id, c));
-        list.forEach(c => mergedCourseMap.set(c.id, c));
+
+        list.forEach(cloudItem => {
+          const localItem = mergedCourseMap.get(cloudItem.id);
+          if (!localItem) {
+            mergedCourseMap.set(cloudItem.id, cloudItem);
+          } else {
+            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+
+            if (localUpdatedTime > cloudUpdatedTime) {
+              // Local is strictly newer! Preserve local modifications (like tutor name)
+              mergedCourseMap.set(cloudItem.id, { ...cloudItem, ...localItem });
+            } else if (cloudUpdatedTime > localUpdatedTime) {
+              // Cloud is strictly newer
+              mergedCourseMap.set(cloudItem.id, { ...localItem, ...cloudItem });
+            } else {
+              // Same timestamp: merge with non-empty local fields taking precedence
+              const merged: Course = { ...cloudItem, ...localItem };
+              if (localItem.instructor && localItem.instructor.trim() && localItem.instructor !== 'ไม่ระบุผู้สอน') {
+                merged.instructor = localItem.instructor;
+              }
+              if (localItem.title && localItem.title.trim()) merged.title = localItem.title;
+              if (localItem.code && localItem.code.trim()) merged.code = localItem.code;
+              if (localItem.roomOrPlatform && localItem.roomOrPlatform.trim()) merged.roomOrPlatform = localItem.roomOrPlatform;
+              mergedCourseMap.set(cloudItem.id, merged);
+            }
+          }
+        });
 
         const finalCourses = Array.from(mergedCourseMap.values());
         finalCourses.sort((a, b) => {
@@ -453,11 +482,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        // Merge locally cached materials with cloud snapshot
+        // Intelligent timestamp-aware merge for materials
         const existingLocal = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
         const mergedMatMap = new Map<string, CourseMaterial>();
         existingLocal.forEach(m => mergedMatMap.set(m.id, m));
-        list.forEach(m => mergedMatMap.set(m.id, m));
+
+        list.forEach(cloudItem => {
+          const localItem = mergedMatMap.get(cloudItem.id);
+          if (!localItem) {
+            mergedMatMap.set(cloudItem.id, cloudItem);
+          } else {
+            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+
+            if (localUpdatedTime > cloudUpdatedTime) {
+              mergedMatMap.set(cloudItem.id, { ...cloudItem, ...localItem });
+            } else if (cloudUpdatedTime > localUpdatedTime) {
+              mergedMatMap.set(cloudItem.id, { ...localItem, ...cloudItem });
+            } else {
+              const merged: CourseMaterial = { ...cloudItem, ...localItem };
+              if (localItem.title && localItem.title.trim()) merged.title = localItem.title;
+              if (localItem.notes && localItem.notes.trim()) merged.notes = localItem.notes;
+              if (localItem.url && localItem.url.trim()) merged.url = localItem.url;
+              if (localItem.duration && localItem.duration.trim()) merged.duration = localItem.duration;
+              mergedMatMap.set(cloudItem.id, merged);
+            }
+          }
+        });
 
         const finalMaterials = Array.from(mergedMatMap.values());
         finalMaterials.sort((a, b) => {
@@ -486,10 +537,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         });
 
+        // Intelligent timestamp-aware merge for events
         const existingLocal = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
         const mergedEvMap = new Map<string, CalendarEvent>();
         existingLocal.forEach(e => mergedEvMap.set(e.id, e));
-        list.forEach(e => mergedEvMap.set(e.id, e));
+
+        list.forEach(cloudItem => {
+          const localItem = mergedEvMap.get(cloudItem.id);
+          if (!localItem) {
+            mergedEvMap.set(cloudItem.id, cloudItem);
+          } else {
+            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+
+            if (localUpdatedTime > cloudUpdatedTime) {
+              mergedEvMap.set(cloudItem.id, { ...cloudItem, ...localItem });
+            } else if (cloudUpdatedTime > localUpdatedTime) {
+              mergedEvMap.set(cloudItem.id, { ...localItem, ...cloudItem });
+            } else {
+              const merged: CalendarEvent = { ...cloudItem, ...localItem };
+              if (localItem.title && localItem.title.trim()) merged.title = localItem.title;
+              if (localItem.date && localItem.date.trim()) merged.date = localItem.date;
+              if (localItem.time && localItem.time.trim()) merged.time = localItem.time;
+              if (localItem.notes && localItem.notes.trim()) merged.notes = localItem.notes;
+              mergedEvMap.set(cloudItem.id, merged);
+            }
+          }
+        });
 
         const finalEvents = Array.from(mergedEvMap.values());
         finalEvents.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
@@ -514,7 +588,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const existingLocal = getLocalData<PortfolioItem[]>(localPortKey, INITIAL_PORTFOLIO_ITEMS);
         const mergedPortMap = new Map<string, PortfolioItem>();
         existingLocal.forEach(p => mergedPortMap.set(p.id, p));
-        list.forEach(p => mergedPortMap.set(p.id, p));
+
+        list.forEach(cloudItem => {
+          const localItem = mergedPortMap.get(cloudItem.id);
+          if (!localItem) {
+            mergedPortMap.set(cloudItem.id, cloudItem);
+          } else {
+            const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
+            const cloudUpdatedTime = new Date(cloudItem.updatedAt || cloudItem.createdAt || 0).getTime();
+
+            if (localUpdatedTime > cloudUpdatedTime) {
+              mergedPortMap.set(cloudItem.id, { ...cloudItem, ...localItem });
+            } else {
+              mergedPortMap.set(cloudItem.id, { ...localItem, ...cloudItem });
+            }
+          }
+        });
 
         const finalPort = Array.from(mergedPortMap.values());
         finalPort.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
@@ -581,19 +670,47 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateCourse = async (id: string, data: Partial<Course>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updatedFields = { ...data, updatedAt: new Date().toISOString() };
-    const updated = courses.map(c => c.id === id ? { ...c, ...updatedFields } : c);
-    setCourses(updated);
-    setLocalData(localCourseKey, updated);
-    setLocalData(fallbackActiveCourseKey, updated);
+    const nowIso = new Date().toISOString();
+    const updatedFields = { ...data, updatedAt: nowIso };
 
+    // 1. Update React state immediately with functional updater (prevents stale closure issues)
+    setCourses(prev => {
+      const idx = prev.findIndex(c => c.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...updatedFields };
+        return next;
+      }
+      return prev;
+    });
+
+    // 2. Update local storage with complete course object immediately
+    const currentCached = getLocalData<Course[]>(localCourseKey, []);
+    const cachedIdx = currentCached.findIndex(c => c.id === id);
+    let updatedCourseObj: Course;
+    if (cachedIdx >= 0) {
+      updatedCourseObj = { ...currentCached[cachedIdx], ...updatedFields };
+      currentCached[cachedIdx] = updatedCourseObj;
+    } else {
+      const fromState = courses.find(c => c.id === id);
+      updatedCourseObj = fromState 
+        ? { ...fromState, ...updatedFields } 
+        : ({ id, ...updatedFields } as Course);
+      currentCached.push(updatedCourseObj);
+    }
+    setLocalData(localCourseKey, currentCached);
+    setLocalData(fallbackActiveCourseKey, currentCached);
+
+    // 3. Persist complete sanitized object to Firestore with merge: true
     if (!user.isDemo) {
       const courseRef = doc(db, 'users', user.uid, 'courses', id);
-      setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true })
-        .then(() => markSynced())
-        .catch((err) => {
-          console.warn('Notice updating course in Firestore (local copy is safe):', err?.message);
-        });
+      try {
+        await setDoc(courseRef, sanitizeForFirestore(updatedCourseObj), { merge: true });
+        markSynced();
+      } catch (err: any) {
+        console.warn('Notice updating course in Firestore (local copy is safe):', err?.message);
+        markSynced();
+      }
     } else {
       markSynced();
     }
@@ -727,19 +844,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateMaterial = async (id: string, data: Partial<CourseMaterial>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updatedFields = { ...data, updatedAt: new Date().toISOString() };
-    const updated = materials.map(m => m.id === id ? { ...m, ...updatedFields } : m);
-    setMaterials(updated);
-    setLocalData(localMatKey, updated);
-    setLocalData(fallbackActiveMatKey, updated);
+    const nowIso = new Date().toISOString();
+    const updatedFields = { ...data, updatedAt: nowIso };
+
+    setMaterials(prev => {
+      const idx = prev.findIndex(m => m.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...updatedFields };
+        return next;
+      }
+      return prev;
+    });
+
+    const currentCached = getLocalData<CourseMaterial[]>(localMatKey, []);
+    const cachedIdx = currentCached.findIndex(m => m.id === id);
+    let updatedMatObj: CourseMaterial;
+    if (cachedIdx >= 0) {
+      updatedMatObj = { ...currentCached[cachedIdx], ...updatedFields };
+      currentCached[cachedIdx] = updatedMatObj;
+    } else {
+      const fromState = materials.find(m => m.id === id);
+      updatedMatObj = fromState 
+        ? { ...fromState, ...updatedFields } 
+        : ({ id, ...updatedFields } as CourseMaterial);
+      currentCached.push(updatedMatObj);
+    }
+    setLocalData(localMatKey, currentCached);
+    setLocalData(fallbackActiveMatKey, currentCached);
 
     if (!user.isDemo) {
       const matDocRef = doc(db, 'users', user.uid, 'materials', id);
-      setDoc(matDocRef, sanitizeForFirestore(updatedFields), { merge: true })
-        .then(() => markSynced())
-        .catch((err) => {
-          console.warn('Notice updating material in Firestore:', err?.message);
-        });
+      try {
+        await setDoc(matDocRef, sanitizeForFirestore(updatedMatObj), { merge: true });
+        markSynced();
+      } catch (err: any) {
+        console.warn('Notice updating material in Firestore:', err?.message);
+        markSynced();
+      }
     } else {
       markSynced();
     }
@@ -842,19 +984,44 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateEvent = async (id: string, data: Partial<CalendarEvent>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updatedFields = { ...data, updatedAt: new Date().toISOString() };
-    const updated = events.map(e => e.id === id ? { ...e, ...updatedFields } : e);
-    setEvents(updated);
-    setLocalData(localEvKey, updated);
-    setLocalData(fallbackActiveEvKey, updated);
+    const nowIso = new Date().toISOString();
+    const updatedFields = { ...data, updatedAt: nowIso };
+
+    setEvents(prev => {
+      const idx = prev.findIndex(e => e.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...updatedFields };
+        return next;
+      }
+      return prev;
+    });
+
+    const currentCached = getLocalData<CalendarEvent[]>(localEvKey, []);
+    const cachedIdx = currentCached.findIndex(e => e.id === id);
+    let updatedEvObj: CalendarEvent;
+    if (cachedIdx >= 0) {
+      updatedEvObj = { ...currentCached[cachedIdx], ...updatedFields };
+      currentCached[cachedIdx] = updatedEvObj;
+    } else {
+      const fromState = events.find(e => e.id === id);
+      updatedEvObj = fromState 
+        ? { ...fromState, ...updatedFields } 
+        : ({ id, ...updatedFields } as CalendarEvent);
+      currentCached.push(updatedEvObj);
+    }
+    setLocalData(localEvKey, currentCached);
+    setLocalData(fallbackActiveEvKey, currentCached);
 
     if (!user.isDemo) {
       const evDocRef = doc(db, 'users', user.uid, 'events', id);
-      setDoc(evDocRef, sanitizeForFirestore(updatedFields), { merge: true })
-        .then(() => markSynced())
-        .catch((err) => {
-          console.warn('Notice updating event in Firestore:', err?.message);
-        });
+      try {
+        await setDoc(evDocRef, sanitizeForFirestore(updatedEvObj), { merge: true });
+        markSynced();
+      } catch (err: any) {
+        console.warn('Notice updating event in Firestore:', err?.message);
+        markSynced();
+      }
     } else {
       markSynced();
     }
@@ -1157,13 +1324,37 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updatePortfolioItem = async (id: string, data: Partial<PortfolioItem>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updated = portfolioItems.map(item => item.id === id ? { ...item, ...data, updatedAt: new Date().toISOString() } : item);
-    setPortfolioItems(updated);
-    setLocalData(localPortKey, updated);
+    const nowIso = new Date().toISOString();
+    const updatedFields = { ...data, updatedAt: nowIso };
+
+    setPortfolioItems(prev => {
+      const idx = prev.findIndex(p => p.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...updatedFields };
+        return next;
+      }
+      return prev;
+    });
+
+    const currentCached = getLocalData<PortfolioItem[]>(localPortKey, []);
+    const cachedIdx = currentCached.findIndex(p => p.id === id);
+    let updatedPortObj: PortfolioItem;
+    if (cachedIdx >= 0) {
+      updatedPortObj = { ...currentCached[cachedIdx], ...updatedFields };
+      currentCached[cachedIdx] = updatedPortObj;
+    } else {
+      const fromState = portfolioItems.find(p => p.id === id);
+      updatedPortObj = fromState 
+        ? { ...fromState, ...updatedFields } 
+        : ({ id, ...updatedFields } as PortfolioItem);
+      currentCached.push(updatedPortObj);
+    }
+    setLocalData(localPortKey, currentCached);
 
     if (!user.isDemo) {
       try {
-        await updateDoc(doc(db, 'users', user.uid, 'portfolio_items', id), { ...data, updatedAt: new Date().toISOString() });
+        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedPortObj), { merge: true });
       } catch (err) {
         console.error('Update portfolio item error:', err);
       }

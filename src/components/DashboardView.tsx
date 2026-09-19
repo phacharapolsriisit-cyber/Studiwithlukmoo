@@ -16,7 +16,8 @@ import {
   Award,
   Bell,
   ExternalLink,
-  Users
+  Users,
+  Edit
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
@@ -24,7 +25,7 @@ import { Course, CalendarEvent, CourseMaterial, ActiveTab } from '../types';
 import { CATEGORIES } from '../utils/categories';
 
 interface DashboardViewProps {
-  onOpenCourseModal: () => void;
+  onOpenCourseModal: (course?: Course) => void;
   onOpenMaterialModal: (courseId?: string) => void;
   onOpenEventModal: (date?: string) => void;
   onOpenYouTubePlayer: (material: CourseMaterial, course?: Course) => void;
@@ -147,7 +148,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
           <button
             id="dash-add-course-btn"
-            onClick={onOpenCourseModal}
+            onClick={() => onOpenCourseModal()}
             className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-blue-900 hover:bg-blue-50 font-semibold text-xs shadow-xs transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4 text-blue-600" />
@@ -509,7 +510,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 เพิ่มวิชาแรกของคุณเพื่อเริ่มเก็บชีทและคลิปเรียน
               </p>
               <button
-                onClick={onOpenCourseModal}
+                onClick={() => onOpenCourseModal()}
                 className="px-3.5 py-2 bg-blue-600 text-white rounded-xl text-xs font-medium shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
               >
                 + เพิ่มวิชาใหม่
@@ -570,6 +571,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           </div>
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenCourseModal(course);
+                        }}
+                        className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                        title="แก้ไขวิชา / เปลี่ยนชื่อติวเตอร์"
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     {/* Progress Bar */}

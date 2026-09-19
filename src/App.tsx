@@ -309,7 +309,7 @@ const AppContent: React.FC = () => {
           <>
             {activeTab === 'dashboard' && (
               <DashboardView
-                onOpenCourseModal={() => handleOpenCourseModal()}
+                onOpenCourseModal={handleOpenCourseModal}
                 onOpenMaterialModal={(courseId) => handleOpenMaterialModal(courseId)}
                 onOpenEventModal={(date) => handleOpenEventModal(date)}
                 onOpenYouTubePlayer={handleOpenYouTubePlayer}
@@ -339,6 +339,7 @@ const AppContent: React.FC = () => {
                 courses={courses}
                 materials={materials}
                 selectedCourseIdFilter={selectedCourseFilterForMaterials}
+                onOpenCourseModal={handleOpenCourseModal}
                 onOpenMaterialModal={handleOpenMaterialModal}
                 onOpenYouTubePlayer={handleOpenYouTubePlayer}
                 onToggleMaterialComplete={toggleMaterialCompleted}

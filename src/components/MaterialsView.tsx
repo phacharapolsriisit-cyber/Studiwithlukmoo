@@ -29,6 +29,7 @@ interface MaterialsViewProps {
   courses: Course[];
   materials: CourseMaterial[];
   selectedCourseIdFilter?: string;
+  onOpenCourseModal?: (course?: Course) => void;
   onOpenMaterialModal: (courseId?: string, initialData?: CourseMaterial) => void;
   onOpenYouTubePlayer: (material: CourseMaterial, course?: Course) => void;
   onToggleMaterialComplete: (id: string, current: boolean) => void;
@@ -41,6 +42,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   courses,
   materials,
   selectedCourseIdFilter,
+  onOpenCourseModal,
   onOpenMaterialModal,
   onOpenYouTubePlayer,
   onToggleMaterialComplete,
@@ -204,13 +206,27 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={() => setCourseFilter('all')}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs border border-slate-200 shadow-2xs transition-colors cursor-pointer whitespace-nowrap self-end sm:self-center"
-          >
-            <X className="w-3.5 h-3.5 text-slate-400" />
-            <span>แสดงทุกวิชา (Show All)</span>
-          </button>
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            {onOpenCourseModal && (
+              <button
+                type="button"
+                onClick={() => onOpenCourseModal(selectedCourse)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs border border-slate-200 shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+                title="แก้ไขข้อมูลวิชาและชื่อติวเตอร์"
+              >
+                <Edit className="w-3.5 h-3.5 text-blue-600" />
+                <span>แก้ไขวิชา/ติวเตอร์</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setCourseFilter('all')}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs border border-slate-200 shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <X className="w-3.5 h-3.5 text-slate-400" />
+              <span>แสดงทุกวิชา (Show All)</span>
+            </button>
+          </div>
         </div>
       )}
 

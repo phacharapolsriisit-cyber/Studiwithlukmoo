@@ -63,10 +63,10 @@ export const UnauthenticatedView: React.FC<UnauthenticatedViewProps> = ({ onOpen
         <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs max-w-md mx-auto text-left space-y-2 text-xs text-slate-600">
           <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm">
             <Lock className="w-4 h-4 text-blue-600" />
-            <span>ระบบความปลอดภัยและการแยกข้อมูลส่วนบุคคล</span>
+            <span>ระบบซิงค์ข้อมูลและคลาวด์</span>
           </div>
           <p className="text-slate-500 leading-relaxed">
-            คอร์สติวและงานทั้งหมดจะถูกแยกเป็นส่วนตัวเฉพาะเจ้าของบัญชีเท่านั้น กรุณาเข้าสู่ระบบเพื่อเข้าถึงข้อมูลของคุณ
+            กรุณาเข้าสู่ระบบเพื่อ <strong>ซิงค์ข้อมูลคอร์สเรียนและงานต่างๆ ของคุณไปยังทุกอุปกรณ์</strong> (คอมพิวเตอร์, มือถือ, แท็บเล็ต) อัตโนมัติ ข้อมูลจะถูกแยกเป็นส่วนตัวเฉพาะเจ้าของบัญชีเท่านั้น
           </p>
         </div>
 
@@ -89,6 +89,9 @@ export const UnauthenticatedView: React.FC<UnauthenticatedViewProps> = ({ onOpen
             <Sparkles className="w-4 h-4 text-blue-600" />
             <span>เข้าใช้งานโหมดทดลอง (Demo Student)</span>
           </button>
+          <p className="text-[10px] text-slate-400 mt-1 sm:mt-0">
+            *โหมดทดลองจะไม่เชื่อมต่อข้อมูลกับอุปกรณ์อื่น
+          </p>
         </div>
 
         {/* Feature Highlights */}

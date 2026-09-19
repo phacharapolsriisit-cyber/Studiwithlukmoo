@@ -32,8 +32,9 @@ interface AuthContextType {
   user: AppUser | null;
   profile: UserProfile | null;
   loading: boolean;
-  syncStatus: 'synced' | 'syncing' | 'error' | 'offline';
+  syncStatus: 'synced' | 'syncing' | 'error' | 'offline' | 'local-only';
   lastSyncTime: Date | null;
+  isDemoSession: boolean;
   loginWithGoogle: () => Promise<void>;
   loginWithGoogleRedirect: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
@@ -43,6 +44,7 @@ interface AuthContextType {
   updateProfileData: (data: Partial<UserProfile>) => Promise<void>;
   markSyncing: () => void;
   markSynced: () => void;
+  markSyncError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -53,13 +55,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<AppUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline'>('synced');
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error' | 'offline' | 'local-only'>('synced');
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
 
-  const markSyncing = () => setSyncStatus('syncing');
+  const isDemoSession = !!user?.isDemo;
+
+  const markSyncing = () => {
+    if (user?.isDemo) {
+      setSyncStatus('local-only');
+    } else {
+      setSyncStatus('syncing');
+    }
+  };
+
   const markSynced = () => {
-    setSyncStatus('synced');
-    setLastSyncTime(new Date());
+    if (user?.isDemo) {
+      setSyncStatus('local-only');
+    } else {
+      setSyncStatus('synced');
+      setLastSyncTime(new Date());
+    }
+  };
+
+  const markSyncError = () => {
+    if (!user?.isDemo) {
+      setSyncStatus('error');
+    }
   };
 
   useEffect(() => {
@@ -397,6 +418,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loading,
       syncStatus,
       lastSyncTime,
+      isDemoSession,
       loginWithGoogle,
       loginWithGoogleRedirect,
       loginWithEmail,
@@ -405,7 +427,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logout,
       updateProfileData,
       markSyncing,
-      markSynced
+      markSynced,
+      markSyncError
     }}>
       {children}
     </AuthContext.Provider>

@@ -23,8 +23,8 @@ interface ProfileModalProps {
 }
 
 export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
-  const { user, profile, updateProfileData, logout, syncStatus, lastSyncTime } = useAuth();
-  const { exportBackupData, importBackupData, courses, materials, events } = useData();
+  const { user, profile, updateProfileData, logout, syncStatus, lastSyncTime, isDemoSession } = useAuth();
+  const { exportBackupData, importBackupData, syncWithCloud, courses, materials, events } = useData();
 
   const [displayName, setDisplayName] = useState('');
   const [photoURL, setPhotoURL] = useState('');
@@ -35,6 +35,8 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [isSyncingManual, setIsSyncingManual] = useState(false);
+  const [syncManualSuccess, setSyncManualSuccess] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -106,6 +108,20 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
     onClose();
   };
 
+  const handleManualSync = async () => {
+    try {
+      setIsSyncingManual(true);
+      setSyncManualSuccess(false);
+      await syncWithCloud();
+      setSyncManualSuccess(true);
+      setTimeout(() => setSyncManualSuccess(false), 3000);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSyncingManual(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
       <div 
@@ -128,29 +144,72 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
         <div className="p-6 overflow-y-auto space-y-6">
           {/* Cloud Info & Firebase Sync Badge */}
-          <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
-                <Cloud className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-slate-900">Firebase Firestore</span>
-                  <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                    lukmoo-tutor
-                  </span>
+          {isDemoSession ? (
+            <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-orange-500 text-white shadow-xs">
+                  <Sparkles className="w-5 h-5" />
                 </div>
-                <p className="text-xs text-slate-600 mt-0.5">
-                  สำรองข้อมูลอัตโนมัติ • บันทึกล่าสุด:{' '}
-                  {lastSyncTime ? lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'}
-                </p>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-sm text-orange-900">โหมดทดลอง (Demo Mode)</span>
+                  </div>
+                  <p className="text-[11px] text-orange-700 mt-0.5">
+                    ข้อมูลจะถูกบันทึกไว้ในเบราว์เซอร์นี้เท่านั้น และจะไม่เชื่อมต่อกับอุปกรณ์อื่น
+                  </p>
+                </div>
+              </div>
+              <p className="text-[10px] text-orange-600 bg-white/60 p-2 rounded-lg border border-orange-100 italic">
+                หากต้องการให้ข้อมูลซิงค์ไปที่มือถือหรือคอมพิวเตอร์เครื่องอื่น กรุณา "ออกจากระบบ" แล้ว "เข้าสู่ระบบด้วย Google"
+              </p>
+            </div>
+          ) : (
+            <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
+                    <Cloud className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-slate-900">Firebase Firestore</span>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        lukmoo-tutor
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      สำรองข้อมูลอัตโนมัติ • บันทึกล่าสุด:{' '}
+                      {lastSyncTime ? lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="text-xs font-medium text-slate-600 bg-white/80 px-3 py-1.5 rounded-lg border border-blue-100 text-center">
+                  {courses.length} วิชา • {materials.length} ชีท/คลิป • {events.length} นัดหมาย
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-blue-100 flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  {syncManualSuccess ? (
+                    <span className="text-emerald-600 font-medium flex items-center gap-1">
+                      <Check className="w-3 h-3" /> เชื่อมต่อคลาวด์สำเร็จ!
+                    </span>
+                  ) : (
+                    <span>หากข้อมูลไม่เชื่อมกัน กดปุ่มขวาเพื่อรีเฟรชการส่งข้อมูล</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isSyncingManual}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 text-blue-700 rounded-lg text-[10px] font-bold hover:bg-blue-50 transition-colors disabled:opacity-50"
+                >
+                  {isSyncingManual ? 'กำลังซิงค์...' : 'รีเฟรชการซิงค์ (Manual Sync)'}
+                </button>
               </div>
             </div>
-
-            <div className="text-xs font-medium text-slate-600 bg-white/80 px-3 py-1.5 rounded-lg border border-blue-100 text-center">
-              {courses.length} วิชา • {materials.length} ชีท/คลิป • {events.length} นัดหมาย
-            </div>
-          </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSaveProfile} className="space-y-4">
@@ -288,6 +347,18 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
             )}
 
             <div className="flex flex-wrap gap-2 pt-1">
+              {!user.isDemo && (
+                <button
+                  type="button"
+                  id="manual-sync-btn"
+                  onClick={() => syncWithCloud()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  <span>ซิงค์กับคลาวด์ตอนนี้</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 id="export-backup-btn"

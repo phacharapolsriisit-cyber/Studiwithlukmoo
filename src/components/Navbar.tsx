@@ -12,9 +12,11 @@ import {
   GraduationCap,
   Bell,
   FolderHeart,
-  Users
+  Users,
+  Sparkles
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { ActiveTab } from '../types';
 
 interface NavbarProps {
@@ -31,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProfileModal,
 }) => {
   const { user, profile, syncStatus, lastSyncTime } = useAuth();
+  const { syncWithCloud } = useData();
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs">
@@ -137,22 +140,35 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="flex items-center gap-2 sm:gap-3">
             {/* Cloud Sync Status */}
             {user && (
-              <div 
-                className="hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600"
-                title={`เชื่อมต่อ Firebase: lukmoo-tutor (${lastSyncTime ? 'ซิงค์เมื่อ ' + lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'})`}
+              <button 
+                id="manual-sync-nav-btn"
+                onClick={() => !user.isDemo && syncWithCloud()}
+                className={`hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+                  user.isDemo 
+                    ? 'bg-orange-50 border-orange-200 text-orange-700 cursor-default' 
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 cursor-pointer'
+                }`}
+                title={user.isDemo 
+                  ? 'โหมดทดลอง: ข้อมูลบันทึกเฉพาะในเครื่องนี้เท่านั้น' 
+                  : `เชื่อมต่อ Firebase: lukmoo-tutor (${lastSyncTime ? 'ซิงค์ล่าสุด ' + lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'}) - คลิกเพื่อซิงค์ข้อมูลด้วยตนเอง`
+                }
               >
-                {syncStatus === 'syncing' ? (
+                {user.isDemo ? (
+                  <Sparkles className="w-3 h-3 text-orange-500" />
+                ) : syncStatus === 'syncing' ? (
                   <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
                 ) : syncStatus === 'error' ? (
                   <div className="w-2 h-2 rounded-full bg-red-500" />
                 ) : (
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
                 )}
-                <span className="font-medium text-slate-700">lukmoo-tutor</span>
-                <span className="text-[11px] text-slate-400">
-                  {syncStatus === 'syncing' ? 'กำลังบันทึก...' : 'คลาวด์พร้อม'}
+                <span className="font-medium">
+                  {user.isDemo ? 'Local Mode' : 'lukmoo-tutor'}
                 </span>
-              </div>
+                <span className={`text-[11px] ${user.isDemo ? 'text-orange-600/70' : 'text-slate-400'}`}>
+                  {user.isDemo ? 'ไม่ซิงค์ข้ามเครื่อง' : syncStatus === 'syncing' ? 'กำลังซิงค์...' : syncStatus === 'error' ? 'เชื่อมต่อล้มเหลว' : 'คลาวด์พร้อม'}
+                </span>
+              </button>
             )}
 
             {/* User Profile or Login Button */}

@@ -182,7 +182,7 @@ export function decodeSharedPayload(encoded: string): SharedItemPayload | null {
 }
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, profile, markSyncing, markSynced } = useAuth();
+  const { user, profile, markSyncing, markSynced, markSyncError } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [materials, setMaterials] = useState<CourseMaterial[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -238,6 +238,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTcasCompletedIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
       setLocalData('lukmoo_tcas_completed_ids', next);
+      
+      // Persist to Firestore if user is logged in
+      if (user && !user.isDemo) {
+        const profileRef = doc(db, 'users', user.uid);
+        updateDoc(profileRef, { tcasCompletedIds: next }).catch(e => console.warn('TCAS sync error:', e));
+      }
+      
       return next;
     });
   };
@@ -519,6 +526,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoadingData(false);
       }, (err) => {
         console.warn('Courses listener notice, using cached local data:', err?.message);
+        markSyncError();
         const cached = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
         setCourses(cached);
         setIsLoadingData(false);
@@ -588,6 +596,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markSynced();
       }, (err) => {
         console.warn('Materials listener notice, using cached local data:', err?.message);
+        markSyncError();
         const cached = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
         setMaterials(cached);
       });
@@ -639,6 +648,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         markSynced();
       }, (err) => {
         console.warn('Events listener notice, using cached local data:', err?.message);
+        markSyncError();
         const cached = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
         setEvents(cached);
       });

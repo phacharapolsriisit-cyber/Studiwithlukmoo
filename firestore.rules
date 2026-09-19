@@ -43,10 +43,9 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
     }
 
-    // Private shared codes
+    // Private shared codes (instant code lookup for all students)
     match /shared_links/{linkId} {
-      allow read, create: if true;
-      allow update, delete: if isAuthenticated() && (resource.data.authorId == request.auth.uid);
+      allow read, write: if true;
     }
   }
 }

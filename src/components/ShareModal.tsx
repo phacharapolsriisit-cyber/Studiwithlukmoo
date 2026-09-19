@@ -119,7 +119,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   if (!isOpen || !targetItem) return null;
 
   const handleCopyCode = async () => {
-    if (!shareCode) return;
+    if (!shareCode || !targetItem) return;
+    createPrivateShareLink(targetItem, privateNote, shareCode).catch(console.error);
     try {
       await navigator.clipboard.writeText(shareCode);
       setCopiedCode(true);
@@ -131,6 +132,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   };
 
   const handleCopyChatInvite = async () => {
+    if (!targetItem || !shareCode) return;
+    createPrivateShareLink(targetItem, privateNote, shareCode).catch(console.error);
     const message = `ฉันแชร์${isCourse ? 'วิชา' : 'เอกสาร'} "${targetItem.title}" ในเว็บ Lukmoo Tutor ให้แล้วนะ!\nนำรหัสนี้: ${shareCode}\nไปกรอกที่ปุ่ม "ใส่โค้ดรับคอร์ส" บนเว็บเพื่อรับเข้าคลังของคุณได้ทันที`;
     try {
       await navigator.clipboard.writeText(message);

@@ -18,14 +18,25 @@ import { INITIAL_COMMUNITY_POSTS } from '../data/mockCommunity';
 import { INITIAL_PORTFOLIO_ITEMS } from '../data/mockPortfolio';
 
 export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  if (!obj || typeof obj !== 'object') return {};
   const clean: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
-        clean[key] = sanitizeForFirestore(value);
-      } else {
-        clean[key] = value;
-      }
+    if (value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      clean[key] = value
+        .filter(item => item !== undefined)
+        .map(item => {
+          if (item !== null && typeof item === 'object' && !(item instanceof Date)) {
+            return sanitizeForFirestore(item);
+          }
+          return item;
+        });
+    } else if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+      clean[key] = sanitizeForFirestore(value);
+    } else {
+      clean[key] = value;
     }
   }
   return clean;
@@ -1001,20 +1012,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     // 1. Instant local storage cache under all alias keys (0ms access)
+    const suffixOnly = cleanCode.startsWith('LM') && cleanCode.length === 6 ? cleanCode.substring(2) : '';
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
     localShares[shareCode] = record;
     localShares[cleanCode] = record;
     localShares[formattedCode] = record;
     localShares[shareId] = record;
+    if (suffixOnly) {
+      localShares[suffixOnly] = record;
+    }
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore in background without blocking caller
+    // 2. Persist to Firestore immediately across all alias document IDs
     const sanitized = sanitizeForFirestore(record);
-    Promise.all([
+    const writePromises = [
       setDoc(doc(db, 'shared_links', cleanCode), sanitized),
       setDoc(doc(db, 'shared_links', formattedCode), sanitized),
-    ]).catch((e) => {
-      console.warn('Firestore shared_links background save warning:', e);
+      setDoc(doc(db, 'shared_links', shareId), sanitized),
+    ];
+    if (suffixOnly) {
+      writePromises.push(setDoc(doc(db, 'shared_links', suffixOnly), sanitized));
+    }
+
+    Promise.all(writePromises).catch((e) => {
+      console.error('Firestore shared_links save error:', e);
     });
 
     const baseUrl = window.location.origin + window.location.pathname;
@@ -1037,6 +1058,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const urlObj = new URL(query, window.location.origin);
         query = urlObj.searchParams.get('code') || 
+                urlObj.searchParams.get('c') ||
                 urlObj.searchParams.get('share_code') || 
                 urlObj.searchParams.get('share_id') || 
                 query;
@@ -1049,12 +1071,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ? upper 
       : (upper.startsWith('LM') && upper.length === 6 ? `LM-${upper.substring(2)}` : upper);
 
+    const withLm = cleanNoHyphen.length === 4 ? `LM${cleanNoHyphen}` : '';
+    const withLmHyphen = cleanNoHyphen.length === 4 ? `LM-${cleanNoHyphen}` : '';
+    const suffixOnly = cleanNoHyphen.startsWith('LM') && cleanNoHyphen.length === 6 ? cleanNoHyphen.substring(2) : '';
+
     // 1. Check local cache (instant 0ms)
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
     const localFound = localShares[query] || 
                        localShares[upper] || 
                        localShares[cleanNoHyphen] || 
                        localShares[formattedHyphen] || 
+                       (withLm ? localShares[withLm] : null) ||
+                       (withLmHyphen ? localShares[withLmHyphen] : null) ||
+                       (suffixOnly ? localShares[suffixOnly] : null) ||
                        (shareId ? localShares[shareId] : null);
 
     if (localFound?.payload && localFound.payload.title) {
@@ -1065,6 +1094,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const lookupKeys = Array.from(new Set([
       cleanNoHyphen, 
       formattedHyphen, 
+      withLm,
+      withLmHyphen,
+      suffixOnly,
       upper, 
       query, 
       shareId
@@ -1088,6 +1120,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.warn('Firestore parallel shared link fetch error:', err);
     }
+
+    // 3. Check community_posts collection as fallback (in case user pasted a community post ID or reference)
+    try {
+      for (const k of lookupKeys.slice(0, 3)) {
+        const postSnap = await getDoc(doc(db, 'community_posts', k)).catch(() => null);
+        if (postSnap && postSnap.exists()) {
+          const postData = postSnap.data();
+          if (postData?.sharedItem && postData.sharedItem.title) {
+            return postData.sharedItem as SharedItemPayload;
+          }
+        }
+      }
+    } catch {}
 
     // 3. Backward compatibility: Base64 decode for older long share codes
     if (query.length > 25) {

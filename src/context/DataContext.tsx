@@ -508,7 +508,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mergedCourseMap.set(cloudItem.id, cloudItem);
         });
 
-        const now = Date.now();
         existingLocal.forEach(localItem => {
           const cloudItem = mergedCourseMap.get(localItem.id);
           const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
@@ -519,10 +518,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mergedCourseMap.set(localItem.id, { ...cloudItem, ...localItem });
             }
           } else {
-            const isVeryNew = (now - localUpdatedTime) < 300000;
-            if (isVeryNew) {
-              mergedCourseMap.set(localItem.id, localItem);
-            }
+            // Keep local item (pending cloud sync or local-first)
+            mergedCourseMap.set(localItem.id, localItem);
           }
         });
 
@@ -561,7 +558,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mergedMatMap.set(cloudItem.id, cloudItem);
         });
 
-        const now = Date.now();
         existingLocal.forEach(localItem => {
           const cloudItem = mergedMatMap.get(localItem.id);
           const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
@@ -572,10 +568,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mergedMatMap.set(localItem.id, { ...cloudItem, ...localItem });
             }
           } else {
-            const isVeryNew = (now - localUpdatedTime) < 300000;
-            if (isVeryNew) {
-              mergedMatMap.set(localItem.id, localItem);
-            }
+            mergedMatMap.set(localItem.id, localItem);
           }
         });
 
@@ -612,7 +605,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mergedEvMap.set(cloudItem.id, cloudItem);
         });
 
-        const now = Date.now();
         existingLocal.forEach(localItem => {
           const cloudItem = mergedEvMap.get(localItem.id);
           const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
@@ -623,10 +615,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mergedEvMap.set(localItem.id, { ...cloudItem, ...localItem });
             }
           } else {
-            const isVeryNew = (now - localUpdatedTime) < 300000;
-            if (isVeryNew) {
-              mergedEvMap.set(localItem.id, localItem);
-            }
+            mergedEvMap.set(localItem.id, localItem);
           }
         });
 
@@ -656,7 +645,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           mergedPortMap.set(cloudItem.id, cloudItem);
         });
 
-        const now = Date.now();
         existingLocal.forEach(localItem => {
           const cloudItem = mergedPortMap.get(localItem.id);
           const localUpdatedTime = new Date(localItem.updatedAt || localItem.createdAt || 0).getTime();
@@ -667,10 +655,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
               mergedPortMap.set(localItem.id, { ...cloudItem, ...localItem });
             }
           } else {
-            const isVeryNew = (now - localUpdatedTime) < 300000;
-            if (isVeryNew) {
-              mergedPortMap.set(localItem.id, localItem);
-            }
+            mergedPortMap.set(localItem.id, localItem);
           }
         });
 

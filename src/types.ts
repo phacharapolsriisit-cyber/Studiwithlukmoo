@@ -53,6 +53,9 @@ export interface CourseMaterial {
   notes?: string;
   isCompleted?: boolean;
   duration?: string; // e.g. "45:20"
+  playbackPosition?: number; // In seconds (e.g. 145) for resuming video
+  durationSeconds?: number;
+  lastWatchedAt?: string;
   createdAt: string;
   updatedAt?: string;
 }

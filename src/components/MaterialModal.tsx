@@ -88,23 +88,55 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Check size limit (cap at ~10MB for local browser base64 storage)
-    if (file.size > 12 * 1024 * 1024) {
-      setError('ขนาดไฟล์ใหญ่เกินไป (จำกัดไม่เกิน 12MB)');
-      return;
-    }
-
-    setFileName(file.name);
     // Format size
     const sizeStr = file.size > 1024 * 1024 
       ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
       : `${Math.round(file.size / 1024)} KB`;
     setFileSize(sizeStr);
+    setFileName(file.name);
 
     if (!title.trim()) {
-      // Auto fill title from file name without extension
       const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
       setTitle(nameWithoutExt);
+    }
+
+    // If image, compress with canvas to keep size under 250KB for fast Firestore sync
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.75);
+          setFileData(compressed);
+        };
+        img.onerror = () => setFileData(uploadEvent.target?.result as string);
+        img.src = uploadEvent.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    // For non-images (PDF, doc)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('ขนาดไฟล์ใหญ่เกินไป (จำกัดไม่เกิน 10MB)');
+      return;
     }
 
     const reader = new FileReader();
@@ -137,14 +169,16 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
         courseId,
         title: title.trim(),
         type,
-        url: url.trim() || undefined,
-        youtubeId: youtubeId || undefined,
-        fileData,
-        fileName,
-        fileSize,
-        notes: notes.trim() || undefined,
-        duration: duration.trim() || undefined,
-        isCompleted: initialData ? initialData.isCompleted : false,
+        url: url.trim() || '',
+        youtubeId: youtubeId || '',
+        fileData: fileData || '',
+        fileName: fileName || '',
+        fileSize: fileSize || '',
+        notes: notes.trim() || '',
+        duration: duration.trim() || '',
+        isCompleted: initialData ? !!initialData.isCompleted : false,
+        playbackPosition: initialData?.playbackPosition || 0,
+        durationSeconds: initialData?.durationSeconds || 0,
       });
       onClose();
     } catch (err: any) {

@@ -510,6 +510,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 const courseMaterials = materials.filter(m => m.courseId === course.id);
                 const videos = courseMaterials.filter(m => m.type === 'video');
                 const sheets = courseMaterials.filter(m => m.type === 'sheet' || m.type === 'document');
+                const completed = courseMaterials.filter(m => m.isCompleted);
+                const courseProgressPercent = courseMaterials.length > 0 
+                  ? Math.round((completed.length / courseMaterials.length) * 100) 
+                  : 0;
 
                 return (
                   <div
@@ -553,6 +557,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
                     </div>
+
+                    {/* Progress Bar */}
+                    {courseMaterials.length > 0 && (
+                      <div className="mt-2 pt-1.5 border-t border-slate-100/80">
+                        <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                          <span>ความคืบหน้าการเรียน</span>
+                          <span className="font-mono font-semibold text-emerald-600">{courseProgressPercent}%</span>
+                        </div>
+                        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              courseProgressPercent === 100 ? 'bg-emerald-500' : 'bg-amber-600'
+                            }`}
+                            style={{ width: `${courseProgressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Quick add material for this course */}
                     <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px]">

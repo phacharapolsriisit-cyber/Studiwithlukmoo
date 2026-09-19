@@ -23,6 +23,20 @@ export function getYouTubeThumbnail(videoId: string): string {
   return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 }
 
-export function getYouTubeEmbedUrl(videoId: string): string {
-  return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&rel=0`;
+export function getYouTubeEmbedUrl(videoId: string, startSeconds?: number): string {
+  const startParam = startSeconds && startSeconds > 0 ? `&start=${Math.floor(startSeconds)}` : '';
+  return `https://www.youtube.com/embed/${videoId}?enablejsapi=1&rel=0&autoplay=1${startParam}`;
+}
+
+export function formatVideoTime(seconds: number): string {
+  if (!seconds || isNaN(seconds) || seconds < 0) return '00:00';
+  const totalSecs = Math.floor(seconds);
+  const hrs = Math.floor(totalSecs / 3600);
+  const mins = Math.floor((totalSecs % 3600) / 60);
+  const secs = totalSecs % 60;
+
+  if (hrs > 0) {
+    return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+  return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }

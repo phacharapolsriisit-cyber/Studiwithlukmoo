@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   ExternalLink, 
   CheckCircle2, 
   Clock, 
-  BookOpen, 
   FileText, 
   Edit3, 
-  Save 
+  Save,
+  RotateCcw,
+  Play,
+  BookmarkCheck
 } from 'lucide-react';
 import { CourseMaterial, Course } from '../types';
-import { getYouTubeEmbedUrl } from '../utils/youtube';
+import { getYouTubeEmbedUrl, formatVideoTime } from '../utils/youtube';
 
 interface YouTubePlayerModalProps {
   isOpen: boolean;
@@ -19,6 +21,7 @@ interface YouTubePlayerModalProps {
   course?: Course | null;
   onToggleComplete: (id: string, current: boolean) => void;
   onUpdateNotes: (id: string, notes: string) => void;
+  onUpdatePlaybackPosition?: (id: string, position: number, duration?: number) => void;
 }
 
 export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
@@ -28,24 +31,108 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
   course,
   onToggleComplete,
   onUpdateNotes,
+  onUpdatePlaybackPosition,
 }) => {
   const [isEditingNotes, setIsEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState(material?.notes || '');
+  const [startSeconds, setStartSeconds] = useState<number>(0);
+  const [currentTime, setCurrentTime] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(0);
+  const [hasCompletedAutoMark, setHasCompletedAutoMark] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  // Initialize playback position from material or localStorage
+  useEffect(() => {
+    if (material) {
+      setNotesText(material.notes || '');
+      const localResume = Number(localStorage.getItem(`yt_resume_${material.id}`) || 0);
+      const savedPos = Math.max(material.playbackPosition || 0, localResume);
+      setStartSeconds(savedPos);
+      setCurrentTime(savedPos);
+      if (material.durationSeconds) {
+        setDuration(material.durationSeconds);
+      }
+      setHasCompletedAutoMark(!!material.isCompleted);
+    }
+  }, [material?.id]);
+
+  // YouTube postMessage polling to track currentTime & duration
+  useEffect(() => {
+    if (!isOpen || !material) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.event === 'infoDelivery' && data.info) {
+          if (typeof data.info.currentTime === 'number') {
+            const cur = Math.floor(data.info.currentTime);
+            setCurrentTime(cur);
+            localStorage.setItem(`yt_resume_${material.id}`, cur.toString());
+          }
+          if (typeof data.info.duration === 'number' && data.info.duration > 0) {
+            setDuration(Math.floor(data.info.duration));
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    // Ping iframe to enable listening
+    const interval = setInterval(() => {
+      if (iframeRef.current && iframeRef.current.contentWindow) {
+        iframeRef.current.contentWindow.postMessage(JSON.stringify({ event: 'listening' }), '*');
+      }
+    }, 1500);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      clearInterval(interval);
+    };
+  }, [isOpen, material]);
+
+  // Auto-mark completed when watched >= 85%
+  useEffect(() => {
+    if (duration > 30 && currentTime > 0 && !hasCompletedAutoMark && material && !material.isCompleted) {
+      if (currentTime / duration >= 0.85) {
+        setHasCompletedAutoMark(true);
+        onToggleComplete(material.id, false);
+      }
+    }
+  }, [currentTime, duration, hasCompletedAutoMark, material, onToggleComplete]);
 
   if (!isOpen || !material || !material.youtubeId) return null;
 
-  const embedUrl = getYouTubeEmbedUrl(material.youtubeId);
+  const embedUrl = getYouTubeEmbedUrl(material.youtubeId, startSeconds);
+
+  const handleRestartFromBeginning = () => {
+    setStartSeconds(0);
+    setCurrentTime(0);
+    localStorage.setItem(`yt_resume_${material.id}`, '0');
+    if (onUpdatePlaybackPosition) {
+      onUpdatePlaybackPosition(material.id, 0, duration);
+    }
+  };
 
   const handleSaveNotes = () => {
     onUpdateNotes(material.id, notesText);
     setIsEditingNotes(false);
   };
 
+  const handleCloseAndSave = () => {
+    if (onUpdatePlaybackPosition && currentTime > 0) {
+      onUpdatePlaybackPosition(material.id, currentTime, duration || undefined);
+    }
+    onClose();
+  };
+
+  const progressPercent = duration > 0 ? Math.min(100, Math.round((currentTime / duration) * 100)) : 0;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/85 backdrop-blur-sm animate-fadeIn">
       <div 
         id="youtube-player-card"
-        className="bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[95vh]"
+        className="bg-slate-900 w-full max-w-4xl rounded-2xl shadow-2xl border border-slate-800 overflow-hidden flex flex-col max-h-[96vh]"
       >
         {/* Top bar */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3 bg-slate-900 border-b border-slate-800 text-white">
@@ -91,24 +178,69 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
             )}
 
             <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              title="ปิดวิดีโอ"
+              onClick={handleCloseAndSave}
+              className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+              title="บันทึกเวลาเรียนและปิด"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
+        {/* Resume status banner if started from mid-video */}
+        {startSeconds > 5 && (
+          <div className="px-4 py-2 bg-amber-950/40 border-b border-amber-800/30 flex items-center justify-between text-xs text-amber-200">
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <span>
+                กำลังเล่นต่อจากที่คุณดูค้างไว้ที่ <strong>{formatVideoTime(startSeconds)}</strong>
+              </span>
+            </div>
+            <button
+              onClick={handleRestartFromBeginning}
+              className="flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-white bg-amber-900/60 hover:bg-amber-800/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>เริ่มใหม่ตั้งแต่ต้น (0:00)</span>
+            </button>
+          </div>
+        )}
+
         {/* Video Embed Frame (Responsive 16:9) */}
         <div className="relative w-full pb-[56.25%] bg-black">
           <iframe
+            ref={iframeRef}
+            key={`yt-frame-${material.id}-${startSeconds}`}
             src={embedUrl}
             title={material.title}
             className="absolute inset-0 w-full h-full border-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
           />
+        </div>
+
+        {/* Video Playback Progress Bar */}
+        <div className="px-4 py-2 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+          <div className="flex items-center gap-2">
+            <Play className="w-3.5 h-3.5 text-red-500 fill-red-500" />
+            <span>ตำแหน่งปัจจุบัน: <strong className="text-white font-mono">{formatVideoTime(currentTime)}</strong></span>
+            {duration > 0 && (
+              <>
+                <span>/</span>
+                <span className="font-mono">{formatVideoTime(duration)}</span>
+                <span className="text-emerald-400 font-semibold">({progressPercent}%)</span>
+              </>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleCloseAndSave}
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+            >
+              บันทึกเวลาเรียน & ปิด
+            </button>
+          </div>
         </div>
 
         {/* Video Info & Notes Bar */}
@@ -135,7 +267,7 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
                 className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300 cursor-pointer font-semibold"
               >
                 <Save className="w-3.5 h-3.5" />
-                <span>บันทึก</span>
+                <span>บันทึกโน้ต</span>
               </button>
             )}
           </div>

@@ -16,6 +16,20 @@ import { Course, CourseMaterial, CalendarEvent, CommunityPost, PostComment, Shar
 import { INITIAL_COMMUNITY_POSTS } from '../data/mockCommunity';
 import { INITIAL_PORTFOLIO_ITEMS } from '../data/mockPortfolio';
 
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        clean[key] = sanitizeForFirestore(value);
+      } else {
+        clean[key] = value;
+      }
+    }
+  }
+  return clean;
+}
+
 interface DataContextType {
   courses: Course[];
   materials: CourseMaterial[];
@@ -48,6 +62,7 @@ interface DataContextType {
   resolvePrivateShare: (shareCode?: string, shareId?: string) => Promise<SharedItemPayload | null>;
   exportBackupData: () => string;
   importBackupData: (jsonData: string) => Promise<void>;
+  syncWithCloud: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -127,60 +142,98 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const coursesRef = collection(db, 'users', user.uid, 'courses');
-      const coursesQuery = query(coursesRef, orderBy('orderIndex', 'asc'));
-      unsubCourses = onSnapshot(coursesQuery, (snapshot) => {
+      unsubCourses = onSnapshot(coursesRef, (snapshot) => {
         const list: Course[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() } as Course);
         });
+        list.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+        // Auto-migrate any local courses not yet in cloud
+        const cached = getLocalData<Course[]>(localCourseKey, []);
+        const unsynced = cached.filter(localItem => !list.some(cloudItem => cloudItem.id === localItem.id));
+        if (unsynced.length > 0 && !user.isDemo) {
+          unsynced.forEach(async (c) => {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true });
+            } catch {}
+          });
+        }
+
         setCourses(list);
         setLocalData(localCourseKey, list);
         markSynced();
         setIsLoadingData(false);
-      }, () => {
-        // Fallback to local storage cache
+      }, (err) => {
+        console.warn('Courses listener error, falling back to cache:', err);
         const cached = getLocalData<Course[]>(localCourseKey, []);
         setCourses(cached);
         setIsLoadingData(false);
       });
 
       const materialsRef = collection(db, 'users', user.uid, 'materials');
-      const materialsQuery = query(materialsRef, orderBy('orderIndex', 'asc'));
-      unsubMaterials = onSnapshot(materialsQuery, (snapshot) => {
+      unsubMaterials = onSnapshot(materialsRef, (snapshot) => {
         const list: CourseMaterial[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() } as CourseMaterial);
         });
+        list.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
+
+        // Auto-migrate any local materials not yet in cloud
+        const cached = getLocalData<CourseMaterial[]>(localMatKey, []);
+        const unsynced = cached.filter(localItem => !list.some(cloudItem => cloudItem.id === localItem.id));
+        if (unsynced.length > 0 && !user.isDemo) {
+          unsynced.forEach(async (m) => {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'materials', m.id), sanitizeForFirestore(m), { merge: true });
+            } catch {}
+          });
+        }
+
         setMaterials(list);
         setLocalData(localMatKey, list);
         markSynced();
-      }, () => {
+      }, (err) => {
+        console.warn('Materials listener error, falling back to cache:', err);
         const cached = getLocalData<CourseMaterial[]>(localMatKey, []);
         setMaterials(cached);
       });
 
       const eventsRef = collection(db, 'users', user.uid, 'events');
-      const eventsQuery = query(eventsRef, orderBy('date', 'asc'));
-      unsubEvents = onSnapshot(eventsQuery, (snapshot) => {
+      unsubEvents = onSnapshot(eventsRef, (snapshot) => {
         const list: CalendarEvent[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() } as CalendarEvent);
         });
+        list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+        // Auto-migrate any local events not yet in cloud
+        const cached = getLocalData<CalendarEvent[]>(localEvKey, []);
+        const unsynced = cached.filter(localItem => !list.some(cloudItem => cloudItem.id === localItem.id));
+        if (unsynced.length > 0 && !user.isDemo) {
+          unsynced.forEach(async (ev) => {
+            try {
+              await setDoc(doc(db, 'users', user.uid, 'events', ev.id), sanitizeForFirestore(ev), { merge: true });
+            } catch {}
+          });
+        }
+
         setEvents(list);
         setLocalData(localEvKey, list);
         markSynced();
-      }, () => {
+      }, (err) => {
+        console.warn('Events listener error, falling back to cache:', err);
         const cached = getLocalData<CalendarEvent[]>(localEvKey, []);
         setEvents(cached);
       });
 
       const portRef = collection(db, 'users', user.uid, 'portfolio_items');
-      const portQuery = query(portRef, orderBy('createdAt', 'desc'));
-      unsubPortfolio = onSnapshot(portQuery, (snapshot) => {
+      unsubPortfolio = onSnapshot(portRef, (snapshot) => {
         const list: PortfolioItem[] = [];
         snapshot.forEach((docSnap) => {
           list.push({ id: docSnap.id, ...docSnap.data() } as PortfolioItem);
         });
+        list.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
         setPortfolioItems(list);
         setLocalData(localPortKey, list);
         markSynced();
@@ -227,8 +280,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
-        await setDoc(courseDocRef, newCourse);
-      } catch {}
+        await setDoc(courseDocRef, sanitizeForFirestore(newCourse), { merge: true });
+      } catch (err) {
+        console.error('Failed to save course to Firestore:', err);
+      }
     }
     markSynced();
     return newId;
@@ -237,15 +292,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateCourse = async (id: string, data: Partial<Course>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updated = courses.map(c => c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c);
+    const updatedFields = { ...data, updatedAt: new Date().toISOString() };
+    const updated = courses.map(c => c.id === id ? { ...c, ...updatedFields } : c);
     setCourses(updated);
     setLocalData(localCourseKey, updated);
 
     if (!user.isDemo) {
       try {
         const courseRef = doc(db, 'users', user.uid, 'courses', id);
-        await updateDoc(courseRef, { ...data, updatedAt: new Date().toISOString() });
-      } catch {}
+        await setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true });
+      } catch (err) {
+        console.error('Failed to update course in Firestore:', err);
+      }
     }
     markSynced();
   };
@@ -275,7 +333,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         for (const e of relatedEvents) {
           await deleteDoc(doc(db, 'users', user.uid, 'events', e.id));
         }
-      } catch {}
+      } catch (err) {
+        console.error('Failed to delete course in Firestore:', err);
+      }
     }
     markSynced();
   };
@@ -317,8 +377,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!user.isDemo) {
       try {
-        await setDoc(doc(db, 'users', user.uid, 'materials', newId), newMaterial);
-      } catch {}
+        const sanitized = sanitizeForFirestore(newMaterial);
+        await setDoc(doc(db, 'users', user.uid, 'materials', newId), sanitized, { merge: true });
+      } catch (err) {
+        console.error('Failed to save material to Firestore:', err);
+      }
     }
     markSynced();
     return newId;
@@ -327,14 +390,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateMaterial = async (id: string, data: Partial<CourseMaterial>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updated = materials.map(m => m.id === id ? { ...m, ...data, updatedAt: new Date().toISOString() } : m);
+    const updatedFields = { ...data, updatedAt: new Date().toISOString() };
+    const updated = materials.map(m => m.id === id ? { ...m, ...updatedFields } : m);
     setMaterials(updated);
     setLocalData(localMatKey, updated);
 
     if (!user.isDemo) {
       try {
-        await updateDoc(doc(db, 'users', user.uid, 'materials', id), { ...data, updatedAt: new Date().toISOString() });
-      } catch {}
+        const sanitized = sanitizeForFirestore(updatedFields);
+        await setDoc(doc(db, 'users', user.uid, 'materials', id), sanitized, { merge: true });
+      } catch (err) {
+        console.error('Failed to update material in Firestore:', err);
+      }
     }
     markSynced();
   };
@@ -349,7 +416,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'materials', id));
-      } catch {}
+      } catch (err) {
+        console.error('Failed to delete material from Firestore:', err);
+      }
     }
     markSynced();
   };
@@ -397,8 +466,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (!user.isDemo) {
       try {
-        await setDoc(doc(db, 'users', user.uid, 'events', newId), newEvent);
-      } catch {}
+        await setDoc(doc(db, 'users', user.uid, 'events', newId), sanitizeForFirestore(newEvent), { merge: true });
+      } catch (err) {
+        console.error('Failed to save event to Firestore:', err);
+      }
     }
     markSynced();
     return newId;
@@ -407,14 +478,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateEvent = async (id: string, data: Partial<CalendarEvent>) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updated = events.map(e => e.id === id ? { ...e, ...data, updatedAt: new Date().toISOString() } : e);
+    const updatedFields = { ...data, updatedAt: new Date().toISOString() };
+    const updated = events.map(e => e.id === id ? { ...e, ...updatedFields } : e);
     setEvents(updated);
     setLocalData(localEvKey, updated);
 
     if (!user.isDemo) {
       try {
-        await updateDoc(doc(db, 'users', user.uid, 'events', id), { ...data, updatedAt: new Date().toISOString() });
-      } catch {}
+        await setDoc(doc(db, 'users', user.uid, 'events', id), sanitizeForFirestore(updatedFields), { merge: true });
+      } catch (err) {
+        console.error('Failed to update event in Firestore:', err);
+      }
     }
     markSynced();
   };
@@ -429,7 +503,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'events', id));
-      } catch {}
+      } catch (err) {
+        console.error('Failed to delete event from Firestore:', err);
+      }
     }
     markSynced();
   };
@@ -800,6 +876,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const syncWithCloud = async () => {
+    if (!user || user.isDemo) return;
+    markSyncing();
+    try {
+      const cachedCourses = getLocalData<Course[]>(localCourseKey, []);
+      for (const c of cachedCourses) {
+        await setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true });
+      }
+
+      const cachedMaterials = getLocalData<CourseMaterial[]>(localMatKey, []);
+      for (const m of cachedMaterials) {
+        await setDoc(doc(db, 'users', user.uid, 'materials', m.id), sanitizeForFirestore(m), { merge: true });
+      }
+
+      const cachedEvents = getLocalData<CalendarEvent[]>(localEvKey, []);
+      for (const e of cachedEvents) {
+        await setDoc(doc(db, 'users', user.uid, 'events', e.id), sanitizeForFirestore(e), { merge: true });
+      }
+
+      const cachedPortfolio = getLocalData<PortfolioItem[]>(localPortKey, []);
+      for (const p of cachedPortfolio) {
+        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', p.id), sanitizeForFirestore(p), { merge: true });
+      }
+
+      markSynced();
+    } catch (err) {
+      console.error('Manual sync error:', err);
+    }
+  };
+
   return (
     <DataContext.Provider value={{
       courses,
@@ -833,6 +939,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       resolvePrivateShare,
       exportBackupData,
       importBackupData,
+      syncWithCloud,
     }}>
       {children}
     </DataContext.Provider>

@@ -215,6 +215,14 @@ const AppContent: React.FC = () => {
     }
   };
 
+  const handleUpdatePlaybackPosition = async (materialId: string, position: number, duration?: number) => {
+    await updateMaterial(materialId, {
+      playbackPosition: position,
+      durationSeconds: duration,
+      lastWatchedAt: new Date().toISOString()
+    });
+  };
+
   const handleSelectCourseMaterials = (courseId: string) => {
     setSelectedCourseFilterForMaterials(courseId);
     setActiveTab('materials');
@@ -485,10 +493,11 @@ const AppContent: React.FC = () => {
       <YouTubePlayerModal
         isOpen={youtubePlayer.isOpen}
         onClose={() => setYoutubePlayer({ isOpen: false, material: null, course: null })}
-        material={youtubePlayer.material}
+        material={youtubePlayer.material ? (materials.find(m => m.id === youtubePlayer.material!.id) || youtubePlayer.material) : null}
         course={youtubePlayer.course}
         onToggleComplete={toggleMaterialCompleted}
         onUpdateNotes={handleUpdateYouTubeNotes}
+        onUpdatePlaybackPosition={handleUpdatePlaybackPosition}
       />
 
       <ProfileModal

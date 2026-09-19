@@ -12,7 +12,8 @@ import {
   BookOpen,
   Filter,
   ExternalLink,
-  Share2
+  Share2,
+  CheckCircle2
 } from 'lucide-react';
 import { Course, CourseMaterial, CalendarEvent, SubjectCategory } from '../types';
 import { CATEGORIES } from '../utils/categories';
@@ -169,6 +170,10 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
             const courseMaterials = materials.filter(m => m.courseId === course.id);
             const videos = courseMaterials.filter(m => m.type === 'video');
             const sheets = courseMaterials.filter(m => m.type === 'sheet' || m.type === 'document');
+            const completedMaterials = courseMaterials.filter(m => m.isCompleted);
+            const progressPercent = courseMaterials.length > 0 
+              ? Math.round((completedMaterials.length / courseMaterials.length) * 100) 
+              : 0;
             const courseEvents = events.filter(e => e.courseId === course.id && !e.isCompleted);
             const categoryObj = CATEGORIES[course.category] || CATEGORIES.general;
 
@@ -275,6 +280,27 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                       <div className="flex items-center gap-1.5 p-2 rounded-xl bg-red-50/60 text-red-900">
                         <Youtube className="w-4 h-4 text-red-600 shrink-0" />
                         <span className="truncate">{videos.length} คลิปยูทูป</span>
+                      </div>
+                    </div>
+
+                    {/* Course Study Progress Bar */}
+                    <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100 space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="font-semibold text-slate-600 flex items-center gap-1">
+                          <CheckCircle2 className={`w-3.5 h-3.5 ${progressPercent === 100 ? 'text-emerald-600 fill-emerald-100' : 'text-slate-400'}`} />
+                          <span>ความคืบหน้าการเรียน</span>
+                        </span>
+                        <span className={`font-bold font-mono ${progressPercent === 100 ? 'text-emerald-600' : 'text-slate-700'}`}>
+                          {completedMaterials.length}/{courseMaterials.length} ({progressPercent}%)
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            progressPercent === 100 ? 'bg-emerald-500' : 'bg-amber-600'
+                          }`}
+                          style={{ width: `${progressPercent}%` }}
+                        />
                       </div>
                     </div>
 

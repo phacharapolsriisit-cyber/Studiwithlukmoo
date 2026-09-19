@@ -46,9 +46,9 @@ export const CATEGORIES: Record<SubjectCategory, CategoryInfo> = {
     id: 'english',
     label: 'ภาษาอังกฤษ (English)',
     iconName: 'Globe',
-    color: '#d97706', // Amber
-    bgColor: 'bg-amber-50 text-amber-700',
-    borderColor: 'border-amber-200',
+    color: '#0284c7', // Sky
+    bgColor: 'bg-sky-50 text-sky-700',
+    borderColor: 'border-sky-200',
   },
   thai: {
     id: 'thai',

@@ -154,20 +154,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         )}
 
         {/* Modal Header */}
-        <div className="bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 p-6 text-white text-center relative overflow-hidden">
-          <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none" />
+        <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 text-white text-center relative overflow-hidden">
           <div className="inline-flex p-3 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner mb-3">
             <GraduationCap className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-2xl font-bold tracking-tight">
             Lukmoo Tutor
           </h2>
-          <p className="text-amber-100 text-xs mt-1 max-w-xs mx-auto">
+          <p className="text-blue-100 text-xs mt-1 max-w-xs mx-auto">
             เข้าสู่ระบบเพื่อจัดการคอร์สติว ชีทเรียน วิดีโอยูทูป และปฏิทินสอบส่วนบุคคล
           </p>
 
           <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 text-[11px] font-medium text-white backdrop-blur-xs">
-            <Cloud className="w-3.5 h-3.5 text-amber-200" />
+            <Cloud className="w-3.5 h-3.5 text-blue-200" />
             <span>เชื่อมต่อกับ Firebase: lukmoo-tutor</span>
           </div>
         </div>
@@ -175,11 +174,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="p-6">
           {/* Mobile In-App Browser (LINE / Facebook) Notice */}
           {isInAppBrowser && (
-            <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5 leading-relaxed">
-              <Smartphone className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div className="mb-4 p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs flex items-start gap-2.5 leading-relaxed">
+              <Smartphone className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <span className="font-bold block text-amber-900">ตรวจพบการเปิดผ่านแอป LINE / Facebook:</span>
-                <p className="text-[11px] text-amber-800">
+                <span className="font-bold block text-blue-900">ตรวจพบการเปิดผ่านแอป LINE / Facebook:</span>
+                <p className="text-[11px] text-blue-800">
                   Google ไม่อนุญาตให้ล็อกอินในเบราว์เซอร์ของแอป (Error 403 Disallowed Useragent)
                 </p>
                 <div className="text-[11px] font-medium text-slate-700 space-y-0.5 pt-1">
@@ -203,7 +202,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <button
                     type="button"
                     onClick={handleDemoLogin}
-                    className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>กดตรงนี้เพื่อเข้าใช้งานทันที (Demo Student)</span>
@@ -275,9 +274,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               type="button"
               onClick={handleDemoLogin}
               disabled={isSubmitting}
-              className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 font-semibold text-xs transition-all cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100/80 text-blue-900 font-semibold text-xs transition-all cursor-pointer"
             >
-              <Sparkles className="w-4 h-4 text-amber-600" />
+              <Sparkles className="w-4 h-4 text-blue-600" />
               <span>เข้าใช้งานทันทีในฐานะนักเรียน (Demo Student)</span>
             </button>
           </div>
@@ -336,7 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="เช่น น้องแพรว หรือ พี่ลูกหมู"
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -355,7 +354,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your.email@example.com"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -373,7 +372,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="อย่างน้อย 6 ตัวอักษร"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -382,7 +381,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               id="auth-submit-btn"
               type="submit"
               disabled={isSubmitting}
-              className="w-full mt-2 py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-semibold text-sm shadow-md shadow-orange-500/20 transition-all disabled:opacity-60 cursor-pointer"
+              className="w-full mt-2 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm shadow-xs transition-all disabled:opacity-60 cursor-pointer"
             >
               {isSubmitting
                 ? 'กำลังดำเนินการ...'

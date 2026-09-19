@@ -81,7 +81,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-amber-600" />
+            <BookOpen className="w-6 h-6 text-blue-600" />
             <span>คอร์สติวและวิชาเรียนของฉัน</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
@@ -92,7 +92,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
         <button
           id="add-course-main-btn"
           onClick={() => onOpenCourseModal()}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-xs transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>เพิ่มคอร์สติว / วิชาใหม่</span>
@@ -109,7 +109,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="ค้นหาตามชื่อวิชา, รหัสวิชา, หรือชื่อติวเตอร์..."
-            className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+            className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           />
         </div>
 
@@ -117,7 +117,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
           <button
             onClick={() => setSelectedCategory('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
               selectedCategory === 'all'
                 ? 'bg-slate-900 text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -132,9 +132,9 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition-colors cursor-pointer ${
                   selectedCategory === cat.id
-                    ? 'bg-amber-600 text-white'
+                    ? 'bg-blue-600 text-white'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -159,7 +159,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
           </p>
           <button
             onClick={() => onOpenCourseModal()}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium shadow-xs transition-colors cursor-pointer"
           >
             + เพิ่มวิชาแรกของคุณ
           </button>
@@ -184,8 +184,8 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                 onDragStart={() => handleDragStart(idx)}
                 onDragOver={(e) => handleDragOver(e, idx)}
                 onDragEnd={handleDragEnd}
-                className={`bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden cursor-grab active:cursor-grabbing ${
-                  draggedIndex === idx ? 'opacity-50 ring-2 ring-amber-500' : ''
+                className={`bg-white rounded-2xl border border-slate-200 shadow-xs hover:border-slate-300 transition-all flex flex-col justify-between overflow-hidden cursor-grab active:cursor-grabbing ${
+                  draggedIndex === idx ? 'opacity-50 ring-2 ring-blue-500' : ''
                 }`}
               >
                 {/* Card Top Accent Bar */}
@@ -217,7 +217,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                         {onShareCourse && (
                           <button
                             onClick={() => onShareCourse(course)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                            className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                             title="แชร์วิชานี้ไปยังชุมชน"
                           >
                             <Share2 className="w-3.5 h-3.5" />
@@ -241,14 +241,19 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                     </div>
 
                     {/* Course Title & Code */}
-                    <h3 className="font-bold text-base text-slate-900 leading-snug">
-                      {course.title}
-                    </h3>
-                    {course.code && (
-                      <span className="inline-block text-[11px] font-mono text-slate-400 font-semibold mt-0.5">
-                        รหัส: {course.code}
-                      </span>
-                    )}
+                    <div 
+                      className="cursor-pointer group"
+                      onClick={() => onSelectCourseMaterials(course.id)}
+                    >
+                      <h3 className="font-semibold text-base text-slate-900 group-hover:text-blue-600 transition-colors leading-snug">
+                        {course.title}
+                      </h3>
+                      {course.code && (
+                        <span className="inline-block text-[11px] font-mono text-slate-400 font-semibold mt-0.5">
+                          รหัส: {course.code}
+                        </span>
+                      )}
+                    </div>
 
                     {/* Instructor & Platform */}
                     <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
@@ -273,8 +278,8 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                   {/* Badges: Sheets, Videos, Upcoming Exam */}
                   <div className="space-y-3 pt-3 border-t border-slate-100">
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="flex items-center gap-1.5 p-2 rounded-xl bg-amber-50/60 text-amber-900">
-                        <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                      <div className="flex items-center gap-1.5 p-2 rounded-xl bg-blue-50/60 text-blue-900">
+                        <FileText className="w-4 h-4 text-blue-600 shrink-0" />
                         <span className="truncate">{sheets.length} ชีท/เอกสาร</span>
                       </div>
                       <div className="flex items-center gap-1.5 p-2 rounded-xl bg-red-50/60 text-red-900">
@@ -297,7 +302,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                       <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
                         <div 
                           className={`h-full rounded-full transition-all duration-500 ${
-                            progressPercent === 100 ? 'bg-emerald-500' : 'bg-amber-600'
+                            progressPercent === 100 ? 'bg-emerald-500' : 'bg-blue-600'
                           }`}
                           style={{ width: `${progressPercent}%` }}
                         />
@@ -325,7 +330,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({
                       </button>
                       <button
                         onClick={() => onOpenMaterialModal(course.id)}
-                        className="p-2 rounded-xl border border-slate-200 hover:border-amber-400 hover:bg-amber-50 text-slate-600 hover:text-amber-800 transition-colors cursor-pointer"
+                        className="p-2 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50 text-slate-600 hover:text-blue-700 transition-colors cursor-pointer"
                         title="เพิ่มชีทหรือคลิปใหม่ในวิชานี้"
                       >
                         <Plus className="w-4 h-4" />

@@ -29,6 +29,7 @@ interface DashboardViewProps {
   onOpenEventModal: (date?: string) => void;
   onOpenYouTubePlayer: (material: CourseMaterial, course?: Course) => void;
   setActiveTab: (tab: ActiveTab) => void;
+  onSelectCourseMaterials?: (courseId: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -37,6 +38,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenEventModal,
   onOpenYouTubePlayer,
   setActiveTab,
+  onSelectCourseMaterials,
 }) => {
   const { profile, user } = useAuth();
   const { courses, materials, events, reorderCourses, toggleEventCompleted } = useData();
@@ -113,7 +115,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Welcome Banner */}
-      <div className="p-6 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white shadow-lg shadow-orange-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="p-6 rounded-2xl bg-blue-600 text-white shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
@@ -123,7 +125,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {profile?.targetExam || 'เตรียมสอบ A-Level'}
             </span>
           </div>
-          <p className="text-amber-100 text-xs sm:text-sm mt-1 max-w-xl">
+          <p className="text-blue-100 text-xs sm:text-sm mt-1 max-w-xl">
             {profile?.bio || 'ระบบจัดการคอร์สติว ชีทเรียน วิดีโอ และปฏิทินเตือนสอบส่วนตัวของคุณพร้อมใช้งานแล้ว'}
           </p>
         </div>
@@ -133,33 +135,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button
             id="dash-add-course-btn"
             onClick={onOpenCourseModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-amber-900 hover:bg-amber-50 font-semibold text-xs shadow-xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-blue-900 hover:bg-blue-50 font-medium text-xs shadow-xs transition-colors cursor-pointer"
           >
-            <Plus className="w-4 h-4 text-amber-600" />
+            <Plus className="w-4 h-4 text-blue-600" />
             <span>เพิ่มคอร์สติว</span>
           </button>
           <button
             id="dash-add-material-btn"
             onClick={() => onOpenMaterialModal()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-700/60 hover:bg-amber-700 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700/60 hover:bg-blue-700 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
           >
-            <FileText className="w-4 h-4 text-amber-200" />
+            <FileText className="w-4 h-4 text-blue-200" />
             <span>เพิ่มชีท / ยูทูป</span>
           </button>
           <button
             id="dash-add-event-btn"
             onClick={() => onOpenEventModal(selectedDateStr)}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-700/60 hover:bg-amber-700 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700/60 hover:bg-blue-700 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
           >
-            <CalendarIcon className="w-4 h-4 text-amber-200" />
+            <CalendarIcon className="w-4 h-4 text-blue-200" />
             <span>ลงวันสอบ / ส่งงาน</span>
           </button>
           <button
             id="dash-news-btn"
             onClick={() => setActiveTab('news')}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-orange-500/80 hover:bg-orange-500 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-700/60 hover:bg-blue-700 text-white font-medium text-xs border border-white/20 transition-colors cursor-pointer"
           >
-            <Users className="w-4 h-4 text-orange-200" />
+            <Users className="w-4 h-4 text-blue-200" />
             <span>ชุมชนเด็กติว</span>
           </button>
         </div>
@@ -168,24 +170,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Community Teaser Banner */}
       <div 
         onClick={() => setActiveTab('news')}
-        className="p-3.5 rounded-2xl bg-gradient-to-r from-orange-50 via-amber-50 to-rose-50 border border-orange-200/80 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer hover:border-orange-300 transition-all group"
+        className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 cursor-pointer transition-colors group"
       >
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-orange-500 text-white group-hover:scale-105 transition-transform shadow-xs">
+          <div className="p-2 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors shadow-xs">
             <Users className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-orange-950">💬 ชุมชนเด็กติว & กระดานแลกเปลี่ยนชีท</span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-200/80 text-orange-800">แบ่งปัน</span>
+              <h3 className="font-semibold text-xs sm:text-sm text-slate-800 group-hover:text-blue-600 transition-colors">
+                ชุมชนแบ่งปันคอร์ส & ชีทสรุป (Community)
+              </h3>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-100">
+                New
+              </span>
             </div>
-            <p className="text-xs text-orange-800/90 mt-0.5">
-              กระดานพูดคุย แลกเปลี่ยนชีทสรุป คลิปติว และลิงก์ตรงระบบ Admission มหาวิทยาลัยทั่วประเทศ
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              แลกเปลี่ยนวิชาเรียน ชีทสรุปสูตร และคลิปวิดีโอ YouTube กับเพื่อนๆ ทั่วประเทศ
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-xs font-bold text-orange-700 group-hover:text-orange-900 group-hover:translate-x-0.5 transition-all shrink-0">
-          <span>เข้าสู่ชุมชนเด็กติว</span>
+        <div className="flex items-center gap-1 text-xs font-semibold text-blue-600 group-hover:translate-x-0.5 transition-transform self-end sm:self-auto">
+          <span>เข้าสู่ชุมชน</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </div>
       </div>
@@ -240,11 +246,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div 
           onClick={() => setActiveTab('courses')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-amber-400 shadow-xs transition-all cursor-pointer group"
+          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">วิชาและคอร์สติว</span>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <BookOpen className="w-4 h-4" />
             </div>
           </div>
@@ -256,11 +262,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div 
           onClick={() => setActiveTab('materials')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-amber-400 shadow-xs transition-all cursor-pointer group"
+          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">ชีทและเอกสาร</span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <FileText className="w-4 h-4" />
             </div>
           </div>
@@ -272,11 +278,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div 
           onClick={() => setActiveTab('materials')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-amber-400 shadow-xs transition-all cursor-pointer group"
+          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">คลิป YouTube</span>
-            <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <Youtube className="w-4 h-4" />
             </div>
           </div>
@@ -288,11 +294,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <div 
           onClick={() => setActiveTab('calendar')}
-          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-amber-400 shadow-xs transition-all cursor-pointer group"
+          className="p-4 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs transition-colors cursor-pointer group"
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">กำหนดการสอบ/ส่งงาน</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:scale-105 transition-transform">
               <CalendarIcon className="w-4 h-4" />
             </div>
           </div>
@@ -310,7 +316,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="lg:col-span-7 bg-white rounded-2xl border border-slate-200 shadow-xs p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-amber-600" />
+              <CalendarIcon className="w-5 h-5 text-blue-600" />
               <h2 className="font-bold text-slate-900 text-base">
                 ปฏิทินวันสอบและกำหนดส่งงาน
               </h2>
@@ -362,11 +368,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div
                   key={dateStr}
                   onClick={() => setSelectedDateStr(dateStr)}
-                  className={`h-11 rounded-xl p-1 flex flex-col items-center justify-between cursor-pointer transition-all border ${
+                  className={`h-11 rounded-xl p-1 flex flex-col items-center justify-between cursor-pointer transition-colors border ${
                     isSelected
-                      ? 'border-amber-500 bg-amber-50/70 font-bold text-amber-900 shadow-xs'
+                      ? 'border-blue-600 bg-blue-50/80 font-bold text-blue-950 shadow-xs'
                       : isToday
-                      ? 'border-blue-400 bg-blue-50/50 text-blue-900'
+                      ? 'border-blue-300 bg-blue-50/40 text-blue-900 font-medium'
                       : 'border-transparent hover:bg-slate-100 text-slate-700'
                   }`}
                 >
@@ -380,7 +386,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           ev.type === 'exam'
                             ? 'bg-red-500'
                             : ev.type === 'assignment'
-                            ? 'bg-amber-500'
+                            ? 'bg-blue-600'
                             : 'bg-purple-500'
                         }`}
                       />
@@ -403,7 +409,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
               <button
                 onClick={() => onOpenEventModal(selectedDateStr)}
-                className="text-[11px] font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1 cursor-pointer"
+                className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>เพิ่มนัดวันนี้</span>
@@ -426,7 +432,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           ? 'bg-slate-50 border-slate-200 text-slate-400 line-through'
                           : ev.type === 'exam'
                           ? 'bg-red-50/40 border-red-200 text-slate-800'
-                          : 'bg-amber-50/40 border-amber-200 text-slate-800'
+                          : 'bg-blue-50/40 border-blue-200 text-slate-800'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -483,7 +489,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <button
               onClick={() => setActiveTab('courses')}
-              className="text-xs font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1"
             >
               <span>ดูทั้งหมด ({courses.length})</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -499,7 +505,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </p>
               <button
                 onClick={onOpenCourseModal}
-                className="px-3 py-1.5 bg-amber-600 text-white rounded-xl text-xs font-semibold shadow-xs hover:bg-amber-700 transition-all cursor-pointer"
+                className="px-3.5 py-2 bg-blue-600 text-white rounded-xl text-xs font-medium shadow-xs hover:bg-blue-700 transition-colors cursor-pointer"
               >
                 + เพิ่มวิชาใหม่
               </button>
@@ -524,7 +530,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     onDragEnd={handleDragEnd}
                     className={`p-3 rounded-xl border transition-all cursor-grab active:cursor-grabbing hover:border-slate-300 ${
                       draggedCourseIndex === idx
-                        ? 'border-amber-500 bg-amber-50/40 opacity-70 shadow-md'
+                        ? 'border-blue-500 bg-blue-50/40 opacity-70 shadow-md'
                         : 'bg-white border-slate-200'
                     }`}
                   >
@@ -536,9 +542,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         className="w-2.5 h-8 rounded-full shrink-0" 
                         style={{ backgroundColor: course.color }}
                       />
-                      <div className="min-w-0 flex-1">
+                      <div 
+                        className="min-w-0 flex-1 cursor-pointer group"
+                        onClick={() => onSelectCourseMaterials && onSelectCourseMaterials(course.id)}
+                      >
                         <div className="flex items-center justify-between">
-                          <h4 className="font-semibold text-xs text-slate-900 truncate">
+                          <h4 className="font-semibold text-xs text-slate-900 group-hover:text-blue-600 truncate transition-colors">
                             {course.title}
                           </h4>
                           {course.code && (
@@ -568,7 +577,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
                           <div 
                             className={`h-full rounded-full transition-all duration-300 ${
-                              courseProgressPercent === 100 ? 'bg-emerald-500' : 'bg-amber-600'
+                              courseProgressPercent === 100 ? 'bg-emerald-500' : 'bg-blue-600'
                             }`}
                             style={{ width: `${courseProgressPercent}%` }}
                           />
@@ -583,7 +592,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                       <button
                         onClick={() => onOpenMaterialModal(course.id)}
-                        className="text-amber-600 hover:text-amber-700 font-semibold flex items-center gap-1 cursor-pointer"
+                        className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
                       >
                         <Plus className="w-3 h-3" />
                         <span>เพิ่มชีท/คลิป</span>

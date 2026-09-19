@@ -34,7 +34,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   courseOfMaterial,
   onSharedSuccess,
 }) => {
-  const { addCommunityPost, createPrivateShareLink } = useData();
+  const { materials, addCommunityPost, createPrivateShareLink } = useData();
   const [shareMode, setShareMode] = useState<'private' | 'community'>('private');
   const [content, setContent] = useState('');
   const [freeTagInput, setFreeTagInput] = useState('Dek68, แชร์วิชาเรียน');
@@ -45,6 +45,8 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [privateNote, setPrivateNote] = useState('');
 
   const isCourse = Boolean(course);
+  const courseMaterials = course ? materials.filter(m => m.courseId === course.id) : [];
+
   const targetItem: SharedItemPayload | null = course
     ? {
         type: 'course',
@@ -53,6 +55,18 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         instructor: course.instructor,
         description: course.description,
         courseTitle: course.title,
+        materials: courseMaterials.map(m => ({
+          title: m.title,
+          type: m.type,
+          url: m.url,
+          youtubeId: m.youtubeId,
+          fileData: m.fileData,
+          fileName: m.fileName,
+          fileSize: m.fileSize,
+          notes: m.notes,
+          duration: m.duration,
+          orderIndex: m.orderIndex,
+        })),
       }
     : material
     ? {
@@ -144,9 +158,9 @@ export const ShareModal: React.FC<ShareModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
               <Share2 className="w-5 h-5" />
             </div>
             <div>
@@ -173,11 +187,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             onClick={() => setShareMode('private')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               shareMode === 'private'
-                ? 'bg-white text-amber-700 shadow-xs border border-amber-200'
+                ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
                 : 'text-slate-600 hover:bg-slate-200/60'
             }`}
           >
-            <Lock className="w-3.5 h-3.5 text-amber-600" />
+            <Lock className="w-3.5 h-3.5 text-blue-600" />
             <span>สร้างลิงก์ส่วนตัว (Private Link)</span>
           </button>
 
@@ -186,20 +200,20 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             onClick={() => setShareMode('community')}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer ${
               shareMode === 'community'
-                ? 'bg-white text-amber-700 shadow-xs border border-amber-200'
+                ? 'bg-white text-blue-700 shadow-xs border border-blue-200'
                 : 'text-slate-600 hover:bg-slate-200/60'
             }`}
           >
-            <Globe2 className="w-3.5 h-3.5 text-amber-600" />
+            <Globe2 className="w-3.5 h-3.5 text-blue-600" />
             <span>โพสต์ลงชุมชนสาธารณะ</span>
           </button>
         </div>
 
         {/* Target Item Preview */}
-        <div className="p-4 bg-amber-50/50 border-b border-slate-100 flex items-start gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 flex items-center justify-center shrink-0 shadow-2xs">
+        <div className="p-4 bg-slate-50/70 border-b border-slate-100 flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs">
             {isCourse ? (
-              <BookOpen className="w-5 h-5 text-amber-600" />
+              <BookOpen className="w-5 h-5 text-blue-600" />
             ) : material?.type === 'video' ? (
               <Youtube className="w-5 h-5 text-red-600" />
             ) : (
@@ -208,7 +222,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
                 {isCourse ? 'คอร์สติว' : material?.type === 'video' ? 'วิดีโอ YouTube' : 'เอกสาร / ชีทสรุป'}
               </span>
               {courseOfMaterial && (
@@ -225,15 +239,24 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 ? `ผู้สอน: ${course?.instructor || 'ไม่ระบุ'}` 
                 : material?.notes || (material?.fileName ? `ไฟล์: ${material.fileName}` : 'พร้อมนำเข้า')}
             </p>
+
+            {isCourse && targetItem.materials && targetItem.materials.length > 0 && (
+              <div className="mt-2 flex items-center gap-1.5 text-[11px] text-blue-900 bg-blue-100/80 px-2.5 py-1 rounded-lg font-medium">
+                <Sparkles className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <span>
+                  แนบไฟล์และคลิปไปด้วย <strong>{targetItem.materials.length} รายการ</strong> ({targetItem.materials.filter(m => m.type === 'video').length} วิดีโอ, {targetItem.materials.filter(m => m.type !== 'video').length} ชีท/เอกสาร)
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Tab 1: Private Sharing Link (ความเป็นส่วนตัว ไม่ลงชุมชน) */}
         {shareMode === 'private' && (
           <div className="p-5 space-y-4">
-            <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-                <Lock className="w-3.5 h-3.5 text-amber-600" />
+            <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+                <Lock className="w-3.5 h-3.5 text-blue-600" />
                 <span>แชร์แบบส่วนตัว (Private Direct Link)</span>
               </div>
               <p className="text-xs text-slate-600">
@@ -250,7 +273,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 placeholder="เช่น การบ้านบทที่ 3, สรุปฟิสิกส์สำหรับสอบปลายภาค..."
                 value={privateNote}
                 onChange={(e) => setPrivateNote(e.target.value)}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
               />
             </div>
 
@@ -274,7 +297,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                     copiedLink
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs'
                   }`}
                 >
                   {copiedLink ? (
@@ -338,14 +361,14 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                         : 'เช่น ชีทสรุปสูตรฟิสิกส์บทนี้ออกสอบบ่อยมาก มีสรุปจุดที่ชอบหลอกไว้ให้ด้วยครับ'
                     }
                     rows={3}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white placeholder:text-slate-400"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white placeholder:text-slate-400"
                   />
                 </div>
 
                 {/* Free Text Tag Input (Removed rigid # selector) */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                    <Tag className="w-3.5 h-3.5 text-amber-600" />
+                    <Tag className="w-3.5 h-3.5 text-blue-600" />
                     <span>แท็กและหัวข้ออิสระ (พิมพ์ได้อย่างอิสระ คั่นด้วยเครื่องหมายจุลภาค)</span>
                   </label>
                   <input
@@ -353,7 +376,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     value={freeTagInput}
                     onChange={(e) => setFreeTagInput(e.target.value)}
                     placeholder="เช่น Dek68, สรุปฟิสิกส์, สอบเข้าจุฬา, เคมีอินทรีย์..."
-                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
+                    className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                   />
                   <p className="text-[11px] text-slate-400 mt-1">
                     * ไม่จำกัดเฉพาะ # ที่กำหนดไว้ สามารถพิมพ์คำค้นหรือหัวข้อที่ต้องการได้อิสระ
@@ -373,7 +396,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-md shadow-orange-500/20 transition-all disabled:opacity-50 cursor-pointer"
+                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>{isSubmitting ? 'กำลังโพสต์...' : 'โพสต์ลงหน้าชุมชน'}</span>

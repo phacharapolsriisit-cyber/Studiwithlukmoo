@@ -245,17 +245,16 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
       )}
 
       {/* Header Banner */}
-      <div className="rounded-3xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 text-white p-6 sm:p-8 shadow-lg shadow-orange-500/15 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+      <div className="rounded-3xl bg-slate-900 text-white p-6 sm:p-8 relative overflow-hidden border border-slate-800">
         <div className="relative z-10 max-w-3xl space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="w-3.5 h-3.5" />
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-xs font-medium tracking-wide">
+            <Sparkles className="w-3.5 h-3.5 text-blue-400" />
             <span>ชุมชนเด็กสายติว & แลกเปลี่ยนชีท</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
             ชุมชนเด็กติว & กระดานแลกเปลี่ยนชีทสรุป
           </h1>
-          <p className="text-white/90 text-xs sm:text-sm leading-relaxed">
+          <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
             พื้นที่พูดคุย ถามโจทย์การบ้าน แลกเปลี่ยนชีท สรุปสูตร และวิดีโอ YouTube ติวฟรีกับเพื่อนๆ 
             พร้อมลิงก์ตรงระบบ Admission มหาวิทยาลัยทั่วประเทศ
           </p>
@@ -269,7 +268,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
           onClick={() => setActiveSubTab('community')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
             activeSubTab === 'community'
-              ? 'bg-amber-600 text-white shadow-xs'
+              ? 'bg-blue-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
@@ -282,7 +281,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
           onClick={() => setActiveSubTab('universities')}
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all cursor-pointer ${
             activeSubTab === 'universities'
-              ? 'bg-amber-600 text-white shadow-xs'
+              ? 'bg-blue-600 text-white shadow-xs'
               : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
           }`}
         >
@@ -297,17 +296,17 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
       {activeSubTab === 'community' && (
         <div className="space-y-6">
           {/* Post Creation Box */}
-          <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-3">
+          <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-3">
             <div className="flex items-center gap-3">
               {user?.photoURL ? (
                 <img 
                   src={user.photoURL} 
                   alt="avatar" 
-                  className="w-10 h-10 rounded-2xl object-cover ring-1 ring-amber-500/30 shrink-0"
+                  className="w-10 h-10 rounded-2xl object-cover ring-1 ring-blue-500/30 shrink-0"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-sm shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-sm shrink-0">
                   {(profile?.displayName || user?.email || 'U').charAt(0).toUpperCase()}
                 </div>
               )}
@@ -327,7 +326,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 onChange={(e) => setPostContent(e.target.value)}
                 placeholder="มีคำถามข้อสอบ, อยากรีวิวคอร์ส, หรืออยากบอกต่อสูตรลัด พิมพ์ที่นี่ได้เลย..."
                 rows={3}
-                className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 placeholder:text-slate-400 bg-slate-50/50"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 placeholder:text-slate-400 bg-slate-50/50"
               />
 
               {/* Image Preview if attached */}
@@ -350,7 +349,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                   <div className="text-xs font-bold text-slate-700">แนบรูปภาพประกอบ:</div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <label className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 cursor-pointer flex items-center justify-center gap-2">
-                      <ImageIcon className="w-4 h-4 text-amber-600" />
+                      <ImageIcon className="w-4 h-4 text-blue-600" />
                       <span>เลือกไฟล์รูปภาพจากอุปกรณ์ (PNG/JPG)</span>
                       <input 
                         type="file" 
@@ -366,12 +365,12 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                       placeholder="หรือวางลิงก์รูปภาพ (Image URL)..."
                       value={postImageUrl}
                       onChange={(e) => setPostImageUrl(e.target.value)}
-                      className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-amber-500 bg-white"
+                      className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500 bg-white"
                     />
                     <button
                       type="button"
                       onClick={() => setIsAttachingImage(false)}
-                      className="text-xs text-slate-400 hover:text-slate-600 px-2"
+                      className="text-xs text-slate-400 hover:text-slate-600 px-2 cursor-pointer"
                     >
                       ยกเลิก
                     </button>
@@ -381,9 +380,9 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
 
               {/* Quick Share from My Collection */}
               {selectedSharedType !== 'none' && (
-                <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs space-y-2">
+                <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200 text-xs space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-amber-900">
+                    <span className="font-bold text-blue-900">
                       แนบวิชาหรือเอกสารจากคลังของฉัน:
                     </span>
                     <button
@@ -393,7 +392,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                         setSelectedSharedCourseId('');
                         setSelectedSharedMaterialId('');
                       }}
-                      className="text-amber-700 hover:text-amber-900 font-semibold"
+                      className="text-blue-700 hover:text-blue-900 font-semibold cursor-pointer"
                     >
                       นำออก
                     </button>
@@ -403,7 +402,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                     <select
                       value={selectedSharedCourseId}
                       onChange={(e) => setSelectedSharedCourseId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-800 text-xs font-medium focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-blue-300 bg-white text-slate-800 text-xs font-medium focus:outline-none"
                     >
                       <option value="">-- เลือกวิชาเรียนที่ต้องการแชร์ --</option>
                       {courses.map((c) => (
@@ -416,7 +415,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                     <select
                       value={selectedSharedMaterialId}
                       onChange={(e) => setSelectedSharedMaterialId(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white text-slate-800 text-xs font-medium focus:outline-none"
+                      className="w-full px-3 py-2 rounded-xl border border-blue-300 bg-white text-slate-800 text-xs font-medium focus:outline-none"
                     >
                       <option value="">-- เลือกชีทสรุปหรือคลิปที่ต้องการแชร์ --</option>
                       {materials.map((m) => (
@@ -438,7 +437,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                     onClick={() => setIsAttachingImage(!isAttachingImage)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors cursor-pointer ${
                       isAttachingImage || postImageUrl
-                        ? 'border-amber-500 bg-amber-50 text-amber-700'
+                        ? 'border-blue-600 bg-blue-50 text-blue-700'
                         : 'border-slate-200 hover:bg-slate-100 text-slate-600'
                     }`}
                   >
@@ -486,14 +485,14 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                     <span>แนบชีท/คลิปของฉัน</span>
                   </button>
 
-                  {/* Free-text Tag / Topic input - User requested free typing without rigid hashtag select */}
+                  {/* Free-text Tag / Topic input */}
                   <div className="flex-1 min-w-[180px]">
                     <input
                       type="text"
                       placeholder="พิมพ์แท็กหรือหัวข้ออิสระ (เช่น Dek68, สรุปฟิสิกส์)..."
                       value={freeTagInput}
                       onChange={(e) => setFreeTagInput(e.target.value)}
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-amber-500 placeholder:text-slate-400"
+                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-700 bg-slate-50 focus:bg-white focus:outline-none focus:border-blue-500 placeholder:text-slate-400"
                     />
                   </div>
                 </div>
@@ -501,7 +500,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 <button
                   type="submit"
                   disabled={isPosting}
-                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-md shadow-orange-500/20 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50 shrink-0"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>{isPosting ? 'กำลังโพสต์...' : 'โพสต์'}</span>
@@ -520,7 +519,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 placeholder="พิมพ์ค้นหากระทู้, คำถาม, ชีทที่แชร์, หรือแท็ก..."
                 value={communitySearch}
                 onChange={(e) => setCommunitySearch(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 rounded-xl text-xs sm:text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-slate-50/60"
+                className="w-full pl-9 pr-8 py-2 rounded-xl text-xs sm:text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
               />
               {communitySearch && (
                 <button
@@ -537,7 +536,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 onClick={() => setCommunityFilter('all')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   communityFilter === 'all'
-                    ? 'bg-amber-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -547,7 +546,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 onClick={() => setCommunityFilter('shared')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   communityFilter === 'shared'
-                    ? 'bg-amber-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -557,7 +556,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 onClick={() => setCommunityFilter('chat')}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   communityFilter === 'chat'
-                    ? 'bg-amber-600 text-white shadow-xs'
+                    ? 'bg-blue-600 text-white shadow-xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
@@ -586,11 +585,11 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                         <img 
                           src={post.authorAvatar} 
                           alt={post.authorName} 
-                          className="w-10 h-10 rounded-2xl object-cover ring-1 ring-amber-500/20 shrink-0"
+                          className="w-10 h-10 rounded-2xl object-cover ring-1 ring-blue-500/20 shrink-0"
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-sm shrink-0">
+                        <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-sm shrink-0">
                           {post.authorName.charAt(0).toUpperCase()}
                         </div>
                       )}
@@ -598,7 +597,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                         <div className="flex items-center gap-2">
                           <h4 className="font-bold text-sm text-slate-900">{post.authorName}</h4>
                           {post.authorTag && (
-                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
                               {post.authorTag}
                             </span>
                           )}
@@ -657,7 +656,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                           </div>
                           <div>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
                                 {post.sharedItem.type === 'course' ? 'คอร์สติวที่แชร์' : post.sharedItem.materialType === 'video' ? 'คลิป YouTube ที่แชร์' : 'ชีทสรุปที่แชร์'}
                               </span>
                               {post.sharedItem.courseTitle && (
@@ -683,7 +682,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                         {/* 1-Click Import Button */}
                         <button
                           onClick={() => handleImport(post.sharedItem!)}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-sm transition-all shrink-0 cursor-pointer"
+                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs shadow-xs transition-all shrink-0 cursor-pointer"
                         >
                           <BookmarkPlus className="w-4 h-4" />
                           <span>บันทึกลงคลัง</span>
@@ -707,7 +706,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                                 createdAt: new Date().toISOString(),
                               });
                             }}
-                            className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 hover:underline"
+                            className="inline-flex items-center gap-1 text-xs font-bold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
                           >
                             <Youtube className="w-4 h-4" />
                             <span>ดูคลิปในหน้าต่างลอยตัว</span>
@@ -721,7 +720,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                   {post.tags && post.tags.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {post.tags.map((t, idx) => (
-                        <span key={idx} className="text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">
+                        <span key={idx} className="text-xs font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
                           {t}
                         </span>
                       ))}
@@ -786,11 +785,11 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                               handleAddComment(post.id);
                             }
                           }}
-                          className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
+                          className="flex-1 px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                         />
                         <button
                           onClick={() => handleAddComment(post.id)}
-                          className="p-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-2xs transition-colors cursor-pointer"
+                          className="p-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer"
                           title="ส่งความคิดเห็น"
                         >
                           <Send className="w-3.5 h-3.5" />
@@ -819,7 +818,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                 placeholder="ค้นหาชื่อมหาวิทยาลัย หรือตัวย่อ (เช่น CU, มธ, มหิดล, KMUTT, มช, มข, แพทย์)..."
                 value={univSearch}
                 onChange={(e) => setUnivSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-slate-50/60"
+                className="w-full pl-9 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
               />
             </div>
 
@@ -837,7 +836,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                   onClick={() => setSelectedRegion(r.id)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     selectedRegion === r.id
-                      ? 'bg-amber-600 text-white shadow-xs'
+                      ? 'bg-blue-600 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
@@ -852,7 +851,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
             {filteredUniversities.map((univ) => (
               <div 
                 key={univ.id}
-                className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-amber-400 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-blue-400 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
                   {/* Header with University Logo Brand */}
@@ -871,7 +870,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                         {univ.phone && (
                           <a 
                             href={`tel:${univ.phone}`}
-                            className="text-[11px] text-slate-400 hover:text-amber-600 flex items-center gap-1"
+                            className="text-[11px] text-slate-400 hover:text-blue-600 flex items-center gap-1"
                             title="โทรสอบถามฝ่ายรับสมัคร"
                           >
                             <Phone className="w-3 h-3" />
@@ -894,7 +893,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                     <ul className="space-y-0.5 pl-1">
                       {univ.highlights.map((h, i) => (
                         <li key={i} className="text-[11px] text-slate-600 flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                           <span className="truncate">{h}</span>
                         </li>
                       ))}
@@ -920,7 +919,7 @@ export const NewsCommunityView: React.FC<NewsCommunityViewProps> = ({
                     href={univ.admissionUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors shadow-xs"
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs transition-colors shadow-xs"
                   >
                     <span>เว็บไซต์รับสมัคร (Admission)</span>
                     <ExternalLink className="w-3.5 h-3.5" />

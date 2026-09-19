@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Youtube, 
@@ -19,7 +19,8 @@ import {
   Share2,
   History,
   RotateCcw,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 import { Course, CourseMaterial, MaterialType } from '../types';
 import { getYouTubeThumbnail, formatVideoTime } from '../utils/youtube';
@@ -52,6 +53,15 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
   const [sortBy, setSortBy] = useState<'history' | 'order' | 'newest' | 'title'>('history');
   const [searchQuery, setSearchQuery] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  // Sync selected course filter from external navigation
+  useEffect(() => {
+    if (selectedCourseIdFilter) {
+      setCourseFilter(selectedCourseIdFilter);
+    }
+  }, [selectedCourseIdFilter]);
+
+  const selectedCourse = courses.find(c => c.id === courseFilter);
 
   // Filter materials
   const filteredMaterials = materials.filter((m) => {
@@ -144,7 +154,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-amber-600" />
+            <BookOpen className="w-6 h-6 text-blue-600" />
             <span>คลังเอกสารและสื่อการเรียน (Media Library)</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
@@ -155,12 +165,50 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         <button
           id="add-material-main-btn"
           onClick={() => onOpenMaterialModal(courseFilter !== 'all' ? courseFilter : undefined)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-sm shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm shadow-xs transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span>เพิ่มชีท / ยูทูปใหม่</span>
         </button>
       </div>
+
+      {/* Active Course Filter Banner */}
+      {selectedCourse && courseFilter !== 'all' && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl bg-blue-50/60 border border-blue-100">
+          <div className="flex items-center gap-3">
+            <div 
+              className="w-3.5 h-10 rounded-full shrink-0 shadow-2xs" 
+              style={{ backgroundColor: selectedCourse.color || '#3B82F6' }} 
+            />
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800">
+                  กำลังแสดงเฉพาะวิชานี้
+                </span>
+                {selectedCourse.code && (
+                  <span className="text-xs text-slate-500 font-mono">
+                    [{selectedCourse.code}]
+                  </span>
+                )}
+              </div>
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 mt-0.5">
+                {selectedCourse.title}
+              </h2>
+              <p className="text-xs text-slate-500">
+                ผู้สอน: {selectedCourse.instructor || 'ไม่ระบุ'} • มีไฟล์และคลิป {filteredMaterials.length} รายการ
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setCourseFilter('all')}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-medium text-xs border border-slate-200 shadow-2xs transition-colors cursor-pointer whitespace-nowrap self-end sm:self-center"
+          >
+            <X className="w-3.5 h-3.5 text-slate-400" />
+            <span>แสดงทุกวิชา (Show All)</span>
+          </button>
+        </div>
+      )}
 
       {/* Filter, Search and Sorting Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
@@ -174,7 +222,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="ค้นหาชื่อชีท, คลิป YouTube, หรือคำในโน้ต..."
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+              className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
 
@@ -184,7 +232,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
               id="filter-course-select"
               value={courseFilter}
               onChange={(e) => setCourseFilter(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 cursor-pointer"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
             >
               <option value="all">ทุกวิชา ({materials.length})</option>
               {courses.map((c) => {
@@ -204,7 +252,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
               id="sort-material-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-amber-50/50 text-amber-950 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 cursor-pointer"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 cursor-pointer"
             >
               <option value="history">⏱️ ประวัติการเข้าชมล่าสุด</option>
               <option value="order">📌 ตามลำดับที่จัดเรียง</option>
@@ -241,7 +289,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
             onClick={() => setTypeFilter('sheet')}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
               typeFilter === 'sheet'
-                ? 'bg-amber-600 text-white'
+                ? 'bg-blue-600 text-white'
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
@@ -273,7 +321,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
         </div>
 
         {courseFilter !== 'all' && sortBy === 'order' && (
-          <div className="text-[11px] text-amber-800 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200/60 flex items-center gap-1.5">
+          <div className="text-[11px] text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 flex items-center gap-1.5">
             <GripVertical className="w-3.5 h-3.5" />
             <span>คุณสามารถคลิกค้างแล้วลากแถบเพื่อจัดลำดับชีทหรือคลิปในวิชานี้ได้</span>
           </div>
@@ -294,7 +342,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
           </p>
           <button
             onClick={() => onOpenMaterialModal(courseFilter !== 'all' ? courseFilter : undefined)}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-medium shadow-xs transition-colors cursor-pointer"
           >
             + เพิ่มชีท / คลิปใหม่
           </button>
@@ -322,7 +370,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                 onDragOver={(e) => handleDragOver(e, idx)}
                 onDragEnd={handleDragEnd}
                 className={`bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex flex-col justify-between overflow-hidden group ${
-                  draggedIndex === idx ? 'opacity-50 ring-2 ring-amber-500' : ''
+                  draggedIndex === idx ? 'opacity-50 ring-2 ring-blue-500' : ''
                 } ${mat.isCompleted ? 'bg-slate-50/70 border-slate-200' : ''}`}
               >
                 {/* YouTube Video Preview / Thumbnail */}
@@ -393,7 +441,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         )}
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
                           mat.type === 'sheet'
-                            ? 'bg-amber-100 text-amber-800'
+                            ? 'bg-blue-100 text-blue-800'
                             : mat.type === 'video'
                             ? 'bg-red-100 text-red-800'
                             : mat.type === 'document'
@@ -409,7 +457,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                         {onShareMaterial && (
                           <button
                             onClick={() => onShareMaterial(mat, course)}
-                            className="p-1 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                            className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                             title="แชร์เอกสาร/คลิปนี้ไปยังชุมชน"
                           >
                             <Share2 className="w-3.5 h-3.5" />
@@ -448,7 +496,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                             {mat.isCompleted ? (
                               <span className="text-emerald-700 font-semibold">เรียนจบแล้ว</span>
                             ) : playbackPos > 5 ? (
-                              <span>ดูค้างไว้ที่ <strong className="text-amber-700 font-mono">{formatVideoTime(playbackPos)}</strong></span>
+                              <span>ดูค้างไว้ที่ <strong className="text-blue-700 font-mono">{formatVideoTime(playbackPos)}</strong></span>
                             ) : (
                               <span className="text-slate-500">ยังไม่เคยเปิดดู</span>
                             )}
@@ -466,7 +514,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                           <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                             <div 
                               className={`h-full rounded-full transition-all duration-300 ${
-                                mat.isCompleted ? 'bg-emerald-500' : 'bg-amber-600'
+                                mat.isCompleted ? 'bg-emerald-500' : 'bg-blue-600'
                               }`}
                               style={{ width: `${mat.isCompleted ? 100 : videoProgressPercent}%` }}
                             />
@@ -485,7 +533,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                     {/* File name / info */}
                     {mat.fileName && (
                       <div className="mt-1 text-[11px] text-slate-500 flex items-center gap-1">
-                        <FileText className="w-3 h-3 text-amber-600 shrink-0" />
+                        <FileText className="w-3 h-3 text-blue-600 shrink-0" />
                         <span className="truncate">{mat.fileName}</span>
                         {mat.fileSize && <span className="text-slate-400">({mat.fileSize})</span>}
                       </div>
@@ -519,7 +567,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                           onClick={() => onOpenYouTubePlayer(mat, course)}
                           className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-white text-xs font-semibold shadow-xs cursor-pointer transition-colors ${
                             playbackPos > 5 && !mat.isCompleted
-                              ? 'bg-amber-600 hover:bg-amber-700'
+                              ? 'bg-blue-600 hover:bg-blue-700'
                               : 'bg-red-600 hover:bg-red-700'
                           }`}
                         >
@@ -532,7 +580,7 @@ export const MaterialsView: React.FC<MaterialsViewProps> = ({
                           {(mat.fileData || mat.url) && (
                             <button
                               onClick={() => handleDownloadFile(mat)}
-                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs cursor-pointer"
+                              className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-xs cursor-pointer"
                             >
                               {mat.fileData ? <Download className="w-3.5 h-3.5" /> : <ExternalLink className="w-3.5 h-3.5" />}
                               <span>{mat.fileData ? 'ดาวน์โหลด' : 'เปิดดูชีท'}</span>

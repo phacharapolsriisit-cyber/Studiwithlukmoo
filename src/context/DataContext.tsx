@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { 
   db, 
   collection, 
   doc, 
+  getDoc,
   setDoc, 
   updateDoc, 
   deleteDoc, 
@@ -94,6 +95,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [isLoadingData, setIsLoadingData] = useState<boolean>(true);
 
+  // Set of deleted IDs to immediately ignore any incoming snapshots or race conditions
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+
   const localCourseKey = user ? `lukmoo_data_${user.uid}_courses` : '';
   const localMatKey = user ? `lukmoo_data_${user.uid}_materials` : '';
   const localEvKey = user ? `lukmoo_data_${user.uid}_events` : '';
@@ -134,7 +138,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Try cloud Firestore first
+    // Cloud Firestore listeners
     let unsubCourses: () => void = () => {};
     let unsubMaterials: () => void = () => {};
     let unsubEvents: () => void = () => {};
@@ -145,20 +149,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubCourses = onSnapshot(coursesRef, (snapshot) => {
         const list: Course[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as Course);
+          if (!deletedIdsRef.current.has(docSnap.id)) {
+            list.push({ id: docSnap.id, ...docSnap.data() } as Course);
+          }
         });
         list.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-
-        // Auto-migrate any local courses not yet in cloud
-        const cached = getLocalData<Course[]>(localCourseKey, []);
-        const unsynced = cached.filter(localItem => !list.some(cloudItem => cloudItem.id === localItem.id));
-        if (unsynced.length > 0 && !user.isDemo) {
-          unsynced.forEach(async (c) => {
-            try {
-              await setDoc(doc(db, 'users', user.uid, 'courses', c.id), sanitizeForFirestore(c), { merge: true });
-            } catch {}
-          });
-        }
 
         setCourses(list);
         setLocalData(localCourseKey, list);
@@ -166,7 +161,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLoadingData(false);
       }, (err) => {
         console.warn('Courses listener error, falling back to cache:', err);
-        const cached = getLocalData<Course[]>(localCourseKey, []);
+        const cached = getLocalData<Course[]>(localCourseKey, []).filter(c => !deletedIdsRef.current.has(c.id));
         setCourses(cached);
         setIsLoadingData(false);
       });
@@ -175,27 +170,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubMaterials = onSnapshot(materialsRef, (snapshot) => {
         const list: CourseMaterial[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as CourseMaterial);
+          if (!deletedIdsRef.current.has(docSnap.id)) {
+            list.push({ id: docSnap.id, ...docSnap.data() } as CourseMaterial);
+          }
         });
         list.sort((a, b) => (a.orderIndex ?? 0) - (b.orderIndex ?? 0));
-
-        // Auto-migrate any local materials not yet in cloud
-        const cached = getLocalData<CourseMaterial[]>(localMatKey, []);
-        const unsynced = cached.filter(localItem => !list.some(cloudItem => cloudItem.id === localItem.id));
-        if (unsynced.length > 0 && !user.isDemo) {
-          unsynced.forEach(async (m) => {
-            try {
-              await setDoc(doc(db, 'users', user.uid, 'materials', m.id), sanitizeForFirestore(m), { merge: true });
-            } catch {}
-          });
-        }
 
         setMaterials(list);
         setLocalData(localMatKey, list);
         markSynced();
       }, (err) => {
         console.warn('Materials listener error, falling back to cache:', err);
-        const cached = getLocalData<CourseMaterial[]>(localMatKey, []);
+        const cached = getLocalData<CourseMaterial[]>(localMatKey, []).filter(m => !deletedIdsRef.current.has(m.id));
         setMaterials(cached);
       });
 
@@ -203,27 +189,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubEvents = onSnapshot(eventsRef, (snapshot) => {
         const list: CalendarEvent[] = [];
         snapshot.forEach((docSnap) => {
-          list.push({ id: docSnap.id, ...docSnap.data() } as CalendarEvent);
+          if (!deletedIdsRef.current.has(docSnap.id)) {
+            list.push({ id: docSnap.id, ...docSnap.data() } as CalendarEvent);
+          }
         });
         list.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
-
-        // Auto-migrate any local events not yet in cloud
-        const cached = getLocalData<CalendarEvent[]>(localEvKey, []);
-        const unsynced = cached.filter(localItem => !list.some(cloudItem => cloudItem.id === localItem.id));
-        if (unsynced.length > 0 && !user.isDemo) {
-          unsynced.forEach(async (ev) => {
-            try {
-              await setDoc(doc(db, 'users', user.uid, 'events', ev.id), sanitizeForFirestore(ev), { merge: true });
-            } catch {}
-          });
-        }
 
         setEvents(list);
         setLocalData(localEvKey, list);
         markSynced();
       }, (err) => {
         console.warn('Events listener error, falling back to cache:', err);
-        const cached = getLocalData<CalendarEvent[]>(localEvKey, []);
+        const cached = getLocalData<CalendarEvent[]>(localEvKey, []).filter(e => !deletedIdsRef.current.has(e.id));
         setEvents(cached);
       });
 
@@ -311,27 +288,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteCourse = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updatedCourses = courses.filter(c => c.id !== id);
-    const updatedMaterials = materials.filter(m => m.courseId !== id);
-    const updatedEvents = events.filter(e => e.courseId !== id);
+    deletedIdsRef.current.add(id);
 
-    setCourses(updatedCourses);
-    setMaterials(updatedMaterials);
-    setEvents(updatedEvents);
-    setLocalData(localCourseKey, updatedCourses);
-    setLocalData(localMatKey, updatedMaterials);
-    setLocalData(localEvKey, updatedEvents);
+    const relatedMatIds = materials.filter(m => m.courseId === id).map(m => m.id);
+    const relatedEvIds = events.filter(e => e.courseId === id).map(e => e.id);
+    relatedMatIds.forEach(mId => deletedIdsRef.current.add(mId));
+    relatedEvIds.forEach(eId => deletedIdsRef.current.add(eId));
+
+    setCourses(prev => {
+      const updated = prev.filter(c => c.id !== id);
+      setLocalData(localCourseKey, updated);
+      return updated;
+    });
+    setMaterials(prev => {
+      const updated = prev.filter(m => m.courseId !== id);
+      setLocalData(localMatKey, updated);
+      return updated;
+    });
+    setEvents(prev => {
+      const updated = prev.filter(e => e.courseId !== id);
+      setLocalData(localEvKey, updated);
+      return updated;
+    });
 
     if (!user.isDemo) {
       try {
         await deleteDoc(doc(db, 'users', user.uid, 'courses', id));
-        const relatedMaterials = materials.filter(m => m.courseId === id);
-        for (const m of relatedMaterials) {
-          await deleteDoc(doc(db, 'users', user.uid, 'materials', m.id));
+        for (const mId of relatedMatIds) {
+          try {
+            await deleteDoc(doc(db, 'users', user.uid, 'materials', mId));
+          } catch {}
         }
-        const relatedEvents = events.filter(e => e.courseId === id);
-        for (const e of relatedEvents) {
-          await deleteDoc(doc(db, 'users', user.uid, 'events', e.id));
+        for (const eId of relatedEvIds) {
+          try {
+            await deleteDoc(doc(db, 'users', user.uid, 'events', eId));
+          } catch {}
         }
       } catch (err) {
         console.error('Failed to delete course in Firestore:', err);
@@ -409,9 +400,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteMaterial = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updated = materials.filter(m => m.id !== id);
-    setMaterials(updated);
-    setLocalData(localMatKey, updated);
+    deletedIdsRef.current.add(id);
+
+    setMaterials(prev => {
+      const updated = prev.filter(m => m.id !== id);
+      setLocalData(localMatKey, updated);
+      return updated;
+    });
 
     if (!user.isDemo) {
       try {
@@ -496,9 +491,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteEvent = async (id: string) => {
     if (!user) throw new Error('User not authenticated');
     markSyncing();
-    const updated = events.filter(e => e.id !== id);
-    setEvents(updated);
-    setLocalData(localEvKey, updated);
+    deletedIdsRef.current.add(id);
+
+    setEvents(prev => {
+      const updated = prev.filter(e => e.id !== id);
+      setLocalData(localEvKey, updated);
+      return updated;
+    });
 
     if (!user.isDemo) {
       try {
@@ -646,8 +645,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: sharedItem.description || `บันทึกมาจากชุมชน Lukmoo Tutor เมื่อ ${new Date().toLocaleDateString('th-TH')}`,
           roomOrPlatform: 'คอร์สแชร์จากชุมชน',
         });
+
+        // Import all attached materials (files, YouTube clips, sheets, documents)
+        if (Array.isArray(sharedItem.materials) && sharedItem.materials.length > 0) {
+          for (let i = 0; i < sharedItem.materials.length; i++) {
+            const mat = sharedItem.materials[i];
+            await addMaterial({
+              courseId: newCourseId,
+              title: mat.title,
+              type: mat.type,
+              url: mat.url,
+              youtubeId: mat.youtubeId,
+              fileData: mat.fileData,
+              fileName: mat.fileName,
+              fileSize: mat.fileSize,
+              notes: mat.notes,
+              duration: mat.duration,
+            });
+          }
+        }
+
         markSynced();
-        return { success: true, message: `บันทึกคอร์ส "${sharedItem.title}" เข้าคลังวิชาของคุณสำเร็จแล้ว!`, courseId: newCourseId };
+        const matCount = sharedItem.materials?.length || 0;
+        return { 
+          success: true, 
+          message: `บันทึกคอร์ส "${sharedItem.title}" ${matCount > 0 ? `พร้อมชีทและคลิป (${matCount} รายการ) ` : ''}เข้าคลังวิชาของคุณสำเร็จแล้ว!`, 
+          courseId: newCourseId 
+        };
       } else {
         // Material import
         // Find if user already has a course matching category
@@ -817,6 +841,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return localShares[key].payload;
         }
       } catch {}
+    }
+
+    // 3. Try fetching from Firestore collection 'shared_links' (for cross-device access)
+    const firestoreKey = shareId || (shareCode && !shareCode.startsWith('{') && shareCode.length < 50 ? shareCode : undefined);
+    if (firestoreKey) {
+      try {
+        const snap = await getDoc(doc(db, 'shared_links', firestoreKey));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data?.payload && data.payload.title && data.payload.type) {
+            return data.payload as SharedItemPayload;
+          }
+        }
+      } catch (err) {
+        console.warn('Firestore shared link fetch error:', err);
+      }
     }
 
     return null;

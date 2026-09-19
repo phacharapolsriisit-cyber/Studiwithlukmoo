@@ -123,7 +123,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="เช่น ตะลุยโจทย์ A-Level ฟิสิกส์ 2026, แคลคูลัส 1"
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             </div>
           </div>
@@ -142,7 +142,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="เช่น ว30201, PHY101"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -159,7 +159,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                   value={instructor}
                   onChange={(e) => setInstructor(e.target.value)}
                   placeholder="เช่น พี่ปั้น, อ.สมศรี, พี่โหน่ง"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -184,7 +184,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                       setColor(CATEGORIES[cat].color);
                     }
                   }}
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 >
                   {Object.values(CATEGORIES).map((cat) => (
                     <option key={cat.id} value={cat.id}>
@@ -207,7 +207,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
                   value={roomOrPlatform}
                   onChange={(e) => setRoomOrPlatform(e.target.value)}
                   placeholder="เช่น YouTube, OnDemand, WeByTheBrain"
-                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -245,7 +245,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="เช่น เน้นทำโจทย์ฟิสิกส์บทกลศาสตร์ เป้าหมายสอบได้ 70+ คะแนนขึ้นไป"
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-none"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
             />
           </div>
 
@@ -262,7 +262,7 @@ export const CourseModal: React.FC<CourseModalProps> = ({
               id="course-submit-btn"
               type="submit"
               disabled={isSubmitting}
-              className="px-5 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? 'กำลังบันทึก...' : initialData ? 'อัปเดตวิชา' : 'เพิ่มวิชานี้'}
             </button>

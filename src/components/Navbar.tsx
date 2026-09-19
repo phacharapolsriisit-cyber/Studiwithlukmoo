@@ -39,19 +39,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Logo & Brand */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-500 flex items-center justify-center text-white shadow-md shadow-orange-500/20">
-              <GraduationCap className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-xs">
+              <GraduationCap className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <span className="font-bold text-lg tracking-tight text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-                  Lukmoo<span className="text-amber-600">Tutor</span>
+                <span className="font-bold text-base sm:text-lg tracking-tight text-slate-900">
+                  Lukmoo<span className="text-blue-600">Tutor</span>
                 </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                  Firebase
+                <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
+                  Cloud
                 </span>
               </div>
-              <p className="text-xs text-slate-500 hidden sm:block">คลังคอร์สติว & ปฏิทินสอบอัจฉริยะ</p>
+              <p className="text-[11px] text-slate-500 hidden sm:block">คลังคอร์สติว & ปฏิทินสอบอัจฉริยะ</p>
             </div>
           </div>
 
@@ -67,7 +67,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                     : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4 text-amber-600" />
+                <LayoutDashboard className="w-4 h-4 text-blue-600" />
                 แดชบอร์ด
               </button>
               <button
@@ -142,7 +142,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title={`เชื่อมต่อ Firebase: lukmoo-tutor (${lastSyncTime ? 'ซิงค์เมื่อ ' + lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'})`}
               >
                 {syncStatus === 'syncing' ? (
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
                 ) : syncStatus === 'error' ? (
                   <div className="w-2 h-2 rounded-full bg-red-500" />
                 ) : (
@@ -160,17 +160,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 id="user-profile-btn"
                 onClick={onOpenProfileModal}
-                className="flex items-center gap-2.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all text-left cursor-pointer"
+                className="flex items-center gap-2.5 p-1.5 sm:px-3 sm:py-1.5 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-colors text-left cursor-pointer"
               >
                 {user.photoURL ? (
                   <img 
                     src={user.photoURL} 
                     alt={user.displayName || 'Profile'} 
-                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-amber-400/40"
+                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-blue-500/20"
                     referrerPolicy="no-referrer"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-bold text-sm">
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center font-bold text-sm">
                     {(profile?.displayName || user.email || 'U').charAt(0).toUpperCase()}
                   </div>
                 )}
@@ -188,7 +188,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 id="open-login-btn"
                 onClick={onOpenAuthModal}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold shadow-xs transition-all cursor-pointer"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold shadow-xs transition-colors cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
                 <span>เข้าสู่ระบบ / ลงทะเบียน</span>
@@ -203,7 +203,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={() => setActiveTab('dashboard')}
               className={`flex flex-col items-center gap-0.5 text-[11px] py-1 px-1.5 rounded-lg font-medium whitespace-nowrap ${
-                activeTab === 'dashboard' ? 'text-amber-600 font-bold' : 'text-slate-500'
+                activeTab === 'dashboard' ? 'text-blue-600 font-bold' : 'text-slate-500'
               }`}
             >
               <LayoutDashboard className="w-4 h-4" />

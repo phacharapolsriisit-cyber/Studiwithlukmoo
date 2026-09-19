@@ -143,9 +143,9 @@ export const EventModal: React.FC<EventModalProps> = ({
                 type="button"
                 id="event-type-assignment"
                 onClick={() => setType('assignment')}
-                className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all ${
+                className={`py-2 px-3 rounded-xl border text-xs font-medium transition-all ${
                   type === 'assignment'
-                    ? 'bg-amber-50 border-amber-400 text-amber-700 shadow-xs'
+                    ? 'bg-blue-50 border-blue-400 text-blue-800 shadow-xs'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
@@ -257,11 +257,11 @@ export const EventModal: React.FC<EventModalProps> = ({
                 onClick={() => setPriority('medium')}
                 className={`py-1.5 rounded-xl border text-xs font-medium ${
                   priority === 'medium'
-                    ? 'bg-amber-500 text-white border-amber-500'
+                    ? 'bg-blue-600 text-white border-blue-600'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                🟡 ปานกลาง
+                🔵 ปานกลาง
               </button>
               <button
                 type="button"

@@ -189,16 +189,16 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
 
         {/* Resume status banner if started from mid-video */}
         {startSeconds > 5 && (
-          <div className="px-4 py-2 bg-amber-950/40 border-b border-amber-800/30 flex items-center justify-between text-xs text-amber-200">
+          <div className="px-4 py-2 bg-blue-950/40 border-b border-blue-800/30 flex items-center justify-between text-xs text-blue-200">
             <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              <Clock className="w-3.5 h-3.5 text-blue-400" />
               <span>
                 กำลังเล่นต่อจากที่คุณดูค้างไว้ที่ <strong>{formatVideoTime(startSeconds)}</strong>
               </span>
             </div>
             <button
               onClick={handleRestartFromBeginning}
-              className="flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-white bg-amber-900/60 hover:bg-amber-800/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-[11px] font-medium text-blue-300 hover:text-white bg-blue-900/60 hover:bg-blue-800/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
             >
               <RotateCcw className="w-3 h-3" />
               <span>เริ่มใหม่ตั้งแต่ต้น (0:00)</span>
@@ -247,7 +247,7 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
         <div className="p-4 sm:p-5 bg-slate-900/90 overflow-y-auto max-h-48 text-slate-300 text-xs border-t border-slate-800">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <FileText className="w-4 h-4 text-amber-500" />
+              <FileText className="w-4 h-4 text-blue-400" />
               <span className="font-semibold text-slate-200">บันทึกช่วยจำ / โน้ตสรุปประจำคลิป</span>
             </div>
             {!isEditingNotes ? (
@@ -256,7 +256,7 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
                   setNotesText(material.notes || '');
                   setIsEditingNotes(true);
                 }}
-                className="flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 cursor-pointer"
+                className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5" />
                 <span>แก้ไขโน้ต</span>
@@ -278,7 +278,7 @@ export const YouTubePlayerModal: React.FC<YouTubePlayerModalProps> = ({
               onChange={(e) => setNotesText(e.target.value)}
               placeholder="พิมพ์สรุปเนื้อหา สูตรสำคัญ หรือนาทีสำคัญ (เช่น 12:45 อธิบายตัวอย่างข้อสอบ..."
               rows={3}
-              className="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="w-full p-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
           ) : (
             <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-800 text-slate-300 leading-relaxed whitespace-pre-wrap">

@@ -136,6 +136,18 @@ export interface SharedItemPayload {
   fileSize?: string;
   notes?: string;
   courseTitle?: string;
+  materials?: Array<{
+    title: string;
+    type: MaterialType;
+    url?: string;
+    youtubeId?: string;
+    fileData?: string;
+    fileName?: string;
+    fileSize?: string;
+    notes?: string;
+    duration?: string;
+    orderIndex?: number;
+  }>;
 }
 
 export interface PostComment {

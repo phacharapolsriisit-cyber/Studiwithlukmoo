@@ -115,7 +115,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2">
-            <User className="w-5 h-5 text-amber-600" />
+            <User className="w-5 h-5 text-blue-600" />
             <h3 className="font-bold text-lg text-slate-900">จัดการโปรไฟล์ผู้เรียน (User Profile)</h3>
           </div>
           <button
@@ -128,9 +128,9 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
 
         <div className="p-6 overflow-y-auto space-y-6">
           {/* Cloud Info & Firebase Sync Badge */}
-          <div className="p-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="p-4 rounded-xl bg-blue-50/50 border border-blue-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500 text-white shadow-xs">
+              <div className="p-2.5 rounded-xl bg-blue-600 text-white shadow-xs">
                 <Cloud className="w-5 h-5" />
               </div>
               <div>
@@ -147,7 +147,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
               </div>
             </div>
 
-            <div className="text-xs font-medium text-slate-500 bg-white/70 px-3 py-1.5 rounded-lg border border-amber-200/40 text-center">
+            <div className="text-xs font-medium text-slate-600 bg-white/80 px-3 py-1.5 rounded-lg border border-blue-100 text-center">
               {courses.length} วิชา • {materials.length} ชีท/คลิป • {events.length} นัดหมาย
             </div>
           </div>
@@ -165,7 +165,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="เช่น พี่ลูกหมู ติวเตอร์"
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                  className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
 
@@ -198,7 +198,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     value={schoolOrUniv}
                     onChange={(e) => setSchoolOrUniv(e.target.value)}
                     placeholder="เช่น เตรียมอุดมศึกษา / จุฬาฯ"
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -215,7 +215,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                     value={targetExam}
                     onChange={(e) => setTargetExam(e.target.value)}
                     placeholder="เช่น แพทย์ กสพท / วิศวะ / A-Level"
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -232,7 +232,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 max="100"
                 value={studyGoalHours}
                 onChange={(e) => setStudyGoalHours(Number(e.target.value))}
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             </div>
 
@@ -246,7 +246,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 placeholder="เช่น ไม่มีความสำเร็จใด ที่ได้มาโดยไม่ต้องพยายาม"
-                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-none"
+                className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
               />
             </div>
 
@@ -263,7 +263,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 id="profile-save-btn"
                 type="submit"
                 disabled={isSaving}
-                className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 <Save className="w-3.5 h-3.5" />
                 <span>{isSaving ? 'กำลังบันทึก...' : 'บันทึกโปรไฟล์'}</span>
@@ -294,7 +294,7 @@ export const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) =
                 onClick={handleExportBackup}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-xl text-xs font-semibold shadow-xs transition-all cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5 text-amber-600" />
+                <Download className="w-3.5 h-3.5 text-blue-600" />
                 <span>ดาวน์โหลดสำรองข้อมูล (JSON)</span>
               </button>
 

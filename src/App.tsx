@@ -250,14 +250,14 @@ const AppContent: React.FC = () => {
   if (authLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-600 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
-        <span className="text-sm font-semibold text-slate-700">กำลังเชื่อมต่อระบบ Lukmoo Tutor...</span>
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+        <span className="text-sm font-medium text-slate-700">กำลังเชื่อมต่อระบบ Lukmoo Tutor...</span>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/70 text-slate-900 flex flex-col selection:bg-amber-100 selection:text-amber-900">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-blue-100 selection:text-blue-900 font-sans">
       {/* Top Navigation */}
       <Navbar
         activeTab={activeTab}
@@ -267,7 +267,7 @@ const AppContent: React.FC = () => {
       />
 
       {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12">
         {!user ? (
           /* Unauthenticated state: Shows welcome hero and prompts login */
           <UnauthenticatedView onOpenAuthModal={() => setIsAuthModalOpen(true)} />
@@ -281,6 +281,7 @@ const AppContent: React.FC = () => {
                 onOpenEventModal={(date) => handleOpenEventModal(date)}
                 onOpenYouTubePlayer={handleOpenYouTubePlayer}
                 setActiveTab={setActiveTab}
+                onSelectCourseMaterials={handleSelectCourseMaterials}
               />
             )}
 
@@ -347,30 +348,30 @@ const AppContent: React.FC = () => {
 
       {/* Incoming Private Share Receiver Modal */}
       {incomingSharedItem && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
-            <div className="bg-gradient-to-r from-amber-500 to-orange-500 p-5 text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-                  <Download className="w-5 h-5" />
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 p-5 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white">
+                  <Download className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm sm:text-base">มีคนแชร์เนื้อหาให้คุณแบบส่วนตัว!</h3>
-                  <p className="text-xs text-amber-100">คลิกลิงก์เพื่อรับวิชาหรือไฟล์เข้าสู่บัญชีของคุณ</p>
+                  <h3 className="font-semibold text-sm sm:text-base">มีคนแชร์เนื้อหาให้คุณ</h3>
+                  <p className="text-xs text-slate-400">คลิกเพื่อรับวิชาหรือไฟล์เข้าสู่บัญชีของคุณ</p>
                 </div>
               </div>
               <button
                 onClick={handleDismissIncomingShare}
-                className="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center text-white/90 hover:text-white transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-amber-200/60 text-amber-800">
+              <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-100">
                     {incomingSharedItem.payload.type === 'course' ? 'คอร์ส / วิชาเรียน' : 'ชีทสรุป / วิดีโอ'}
                   </span>
                   {incomingSharedItem.payload.category && (
@@ -379,7 +380,7 @@ const AppContent: React.FC = () => {
                     </span>
                   )}
                 </div>
-                <h4 className="font-bold text-slate-900 text-sm sm:text-base mb-1">
+                <h4 className="font-semibold text-slate-900 text-sm sm:text-base mb-1">
                   {incomingSharedItem.payload?.title || 'เนื้อหาที่แชร์'}
                 </h4>
                 {incomingSharedItem.payload.courseTitle && incomingSharedItem.payload.type === 'material' && (
@@ -404,11 +405,11 @@ const AppContent: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={handleDismissIncomingShare}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-all cursor-pointer"
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   ยกเลิก
                 </button>
@@ -416,7 +417,7 @@ const AppContent: React.FC = () => {
                   type="button"
                   disabled={isImportingShared}
                   onClick={handleConfirmImport}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs shadow-md shadow-orange-500/20 transition-all cursor-pointer disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isImportingShared ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -432,16 +433,16 @@ const AppContent: React.FC = () => {
       )}
 
       {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200/80 bg-white/70 py-4 text-xs text-slate-500">
+      <footer className="mt-auto border-t border-slate-200 bg-white py-4 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-slate-800">Lukmoo Tutor</span>
             <span>•</span>
-            <span>ระบบจัดเก็บคอร์สติวและคลังความรู้ส่วนบุคคล</span>
+            <span>ระบบจัดเก็บคอร์สติวและคลังความรู้</span>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-slate-400">
-            <Cloud className="w-3.5 h-3.5 text-amber-500" />
-            <span>Firebase Firestore: lukmoo-tutor</span>
+            <Cloud className="w-3.5 h-3.5 text-blue-600" />
+            <span>Firebase Firestore</span>
             <span>•</span>
             <span className="text-emerald-600 font-medium">สำรองข้อมูลอัตโนมัติ</span>
           </div>

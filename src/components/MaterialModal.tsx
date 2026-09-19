@@ -201,7 +201,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
             {type === 'video' ? (
               <Youtube className="w-5 h-5 text-red-600" />
             ) : (
-              <FileText className="w-5 h-5 text-amber-600" />
+              <FileText className="w-5 h-5 text-blue-600" />
             )}
             <span>{initialData ? 'แก้ไขเอกสาร / วิดีโอ' : 'เพิ่มชีทเรียน / ลิงก์ YouTube'}</span>
           </h3>
@@ -231,7 +231,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
               required
               value={courseId}
               onChange={(e) => setCourseId(e.target.value)}
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             >
               {courses.length === 0 ? (
                 <option value="">(ยังไม่มีวิชา - กรุณาสร้างวิชาก่อน)</option>
@@ -257,11 +257,11 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                 onClick={() => setType('sheet')}
                 className={`flex flex-col items-center gap-1 p-2.5 rounded-xl border text-xs font-medium transition-all ${
                   type === 'sheet'
-                    ? 'border-amber-500 bg-amber-50/70 text-amber-900 shadow-xs'
+                    ? 'border-blue-600 bg-blue-50/70 text-blue-950 shadow-xs'
                     : 'border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <FileText className="w-4 h-4 text-amber-600" />
+                <FileText className="w-4 h-4 text-blue-600" />
                 <span>ชีทเรียน</span>
               </button>
 
@@ -325,7 +325,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                   ? 'เช่น EP.1 สรุปสูตรตรีโกณมิติแบบรวบรัด'
                   : 'เช่น ชีทสรุปสูตรฟิสิกส์ ม.6 เทอม 1 พร้อมข้อสอบเก่า'
               }
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
 
@@ -401,12 +401,12 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
                   <span className="flex items-center gap-1.5">
-                    <Upload className="w-3.5 h-3.5 text-amber-600" />
+                    <Upload className="w-3.5 h-3.5 text-blue-600" />
                     <span>อัปโหลดไฟล์ชีท / เอกสาร</span>
                   </span>
                   <span className="text-[11px] text-slate-400">รองรับ PDF, รูปภาพ, สไลด์ (ไม่เกิน 12MB)</span>
                 </label>
-                <div className="border-2 border-dashed border-slate-200 hover:border-amber-400 rounded-xl p-4 text-center cursor-pointer transition-colors bg-slate-50/50 relative">
+                <div className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-xl p-4 text-center cursor-pointer transition-colors bg-slate-50/50 relative">
                   <input
                     id="material-file-input"
                     type="file"
@@ -444,7 +444,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://drive.google.com/file/d/... หรือ ลิงก์ดาวน์โหลด"
-                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500"
+                    className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -462,7 +462,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="เช่น เน้นจำสูตรหน้า 3 ข้อ 15-20 ออกสอบบ่อยมาก"
-              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 resize-none"
+              className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
             />
           </div>
 
@@ -479,7 +479,7 @@ export const MaterialModal: React.FC<MaterialModalProps> = ({
               id="material-submit-btn"
               type="submit"
               disabled={isSubmitting || courses.length === 0}
-              className="px-5 py-2 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              className="px-5 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors disabled:opacity-50 cursor-pointer"
             >
               {isSubmitting ? 'กำลังบันทึก...' : initialData ? 'อัปเดตข้อมูล' : 'บันทึกเอกสาร'}
             </button>

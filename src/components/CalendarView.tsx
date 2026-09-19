@@ -104,7 +104,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
       );
     }
     return (
-      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
         อีก {diff} วัน
       </span>
     );
@@ -198,7 +198,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
           <button
             onClick={() => setSelectedTypeFilter('assignment')}
             className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${
-              selectedTypeFilter === 'assignment' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600'
+              selectedTypeFilter === 'assignment' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'
             }`}
           >
             ส่งงาน
@@ -295,7 +295,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                               ? 'bg-slate-100 text-slate-400 line-through'
                               : ev.type === 'exam'
                               ? 'bg-red-500 text-white'
-                              : 'bg-amber-500 text-white'
+                              : 'bg-blue-600 text-white'
                           }`}
                         >
                           {ev.title}
@@ -461,7 +461,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({
                             </span>
                           )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            ev.type === 'exam' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'
+                            ev.type === 'exam' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-800'
                           }`}>
                             {ev.type === 'exam' ? 'วันสอบ' : 'ส่งงาน'}
                           </span>

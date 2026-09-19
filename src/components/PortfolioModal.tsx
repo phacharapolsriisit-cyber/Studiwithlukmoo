@@ -126,9 +126,9 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-amber-500/10 via-rose-500/10 to-transparent">
+        <div className="p-5 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-amber-600 text-white flex items-center justify-center shadow-md shadow-amber-600/20">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xs">
               <FolderHeart className="w-5 h-5" />
             </div>
             <div>
@@ -174,7 +174,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
                   onClick={() => setCategory(cat.id)}
                   className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
                     category === cat.id
-                      ? 'border-amber-500 bg-amber-50/80 shadow-xs'
+                      ? 'border-blue-600 bg-blue-50/80 text-blue-950 shadow-xs'
                       : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                   }`}
                 >
@@ -197,7 +197,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
               placeholder="เช่น ประธานโครงการค่ายวิทยาศาสตร์สู่ชุมชน, เหรียญทองโครงงาน AI..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
 
@@ -215,7 +215,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
                   placeholder="เช่น สมาคมดาราศาสตร์ไทย, โรงเรียน..."
                   value={organization}
                   onChange={(e) => setOrganization(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                 />
               </div>
             </div>
@@ -230,7 +230,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-white"
+                  className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                 />
               </div>
             </div>
@@ -245,7 +245,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
               <select
                 value={level}
                 onChange={(e: any) => setLevel(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-amber-500 font-medium"
+                className="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm bg-white focus:outline-none focus:border-blue-500 font-medium"
               >
                 <option value="school">ระดับโรงเรียน / ภายในสถานศึกษา</option>
                 <option value="district">ระดับกลุ่มโรงเรียน / อำเภอ / สพม.</option>
@@ -268,7 +268,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
                     placeholder="เช่น 12 หรือ 24 ชั่วโมง"
                     value={hours}
                     onChange={(e) => setHours(e.target.value ? Number(e.target.value) : '')}
-                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                    className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -285,14 +285,14 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
               placeholder="ระบุว่าคุณได้ทำอะไร รับผิดชอบหน้าที่อะไรในกิจกรรมนี้..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
             />
           </div>
 
           {/* Reflection / Learning Outcomes (TCAS standard) */}
-          <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+          <div className="p-3.5 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-blue-900">
+              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
               <span>สิ่งที่ได้เรียนรู้และทักษะที่พัฒนา (สำคัญมากสำหรับการยื่นพอร์ต!)</span>
             </div>
             <textarea
@@ -300,9 +300,9 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
               placeholder="เช่น ได้ฝึกภาวะผู้นำ, การทำงานเป็นทีม, การแก้ไขปัญหาเฉพาะหน้า, ทักษะการวิจัย..."
               value={reflection}
               onChange={(e) => setReflection(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-amber-200 text-xs focus:outline-none focus:border-amber-500 bg-white"
+              className="w-full px-3 py-2 rounded-xl border border-blue-200 text-xs focus:outline-none focus:border-blue-500 bg-white"
             />
-            <p className="text-[10px] text-amber-700">
+            <p className="text-[10px] text-blue-700">
               * กรรมการตรวจพอร์ตของมหาวิทยาลัยเน้นดูการสะท้อนตัวตนและการเติบโต (Reflection) ยิ่งกว่าจำนวนรูปถ่าย
             </p>
           </div>
@@ -328,7 +328,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
                 placeholder="หรือวาง URL รูปภาพ..."
                 value={imageUrl}
                 onChange={(e) => setImageUrl(e.target.value)}
-                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-amber-500"
+                className="flex-1 px-3 py-2 rounded-xl border border-slate-200 text-xs focus:outline-none focus:border-blue-500"
               />
             </div>
             {imageUrl && (
@@ -357,7 +357,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
                 placeholder="เช่น ลิงก์ Google Drive, ลิงก์ข่าว, หรือเว็บไซต์โครงการ..."
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             </div>
           </div>
@@ -374,7 +374,7 @@ export const PortfolioModal: React.FC<PortfolioModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors shadow-sm disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-xs disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
             >
               <CheckCircle2 className="w-4 h-4" />
               <span>{editingItem ? 'บันทึกการแก้ไข' : 'บันทึกเข้า Portfolio'}</span>

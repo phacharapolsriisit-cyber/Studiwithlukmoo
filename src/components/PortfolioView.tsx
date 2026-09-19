@@ -19,6 +19,7 @@ import {
   Share2, 
   ChevronRight,
   Maximize2,
+  Download,
   X
 } from 'lucide-react';
 import { useData } from '../context/DataContext';
@@ -33,13 +34,60 @@ export const PortfolioView: React.FC = () => {
   const [selectedLevel, setSelectedLevel] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<PortfolioItem | null>(null);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; title: string } | null>(null);
   const [showTcasFolioGuide, setShowTcasFolioGuide] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleDownloadImage = async (url: string, title: string) => {
+    try {
+      const cleanName = (title || 'portfolio_item')
+        .replace(/[^a-zA-Z0-9\u0E00-\u0E7F-_]/g, '_')
+        .slice(0, 40);
+
+      if (url.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = url;
+        const ext = url.includes('image/png') ? 'png' : 'jpg';
+        a.download = `${cleanName}.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        showToast('บันทึกรูปลงอุปกรณ์เรียบร้อยแล้ว');
+        return;
+      }
+
+      // If external or blob URL, try fetching blob to force download
+      const response = await fetch(url, { mode: 'cors' });
+      if (response.ok) {
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${cleanName}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+        showToast('บันทึกรูปลงอุปกรณ์เรียบร้อยแล้ว');
+        return;
+      }
+      throw new Error('CORS or fetch error');
+    } catch {
+      // Direct anchor click fallback
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.download = `${title || 'portfolio'}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast('เปิดรูปภาพเพื่อบันทึกแล้ว (แตะค้างหรือคลิกขวาเพื่อบันทึกรูป)');
+    }
   };
 
   // Counts by category
@@ -125,18 +173,18 @@ export const PortfolioView: React.FC = () => {
       )}
 
       {/* Hero Header */}
-      <div className="rounded-3xl bg-gradient-to-r from-amber-600 via-rose-600 to-purple-700 text-white p-6 sm:p-8 shadow-lg shadow-amber-600/15 relative overflow-hidden">
-        <div className="absolute right-0 top-0 w-80 h-80 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
+      <div className="rounded-3xl bg-slate-900 text-white p-6 sm:p-8 shadow-xs relative overflow-hidden">
+        <div className="absolute right-0 top-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold uppercase tracking-wider">
-              <FolderHeart className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-medium uppercase tracking-wider text-blue-200">
+              <FolderHeart className="w-3.5 h-3.5 text-blue-400" />
               <span>TCAS Portfolio & Folio Hub</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
               คลังผลงานสะสม Portfolio รอบที่ 1
             </h1>
-            <p className="text-white/90 text-xs sm:text-sm leading-relaxed">
+            <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">
               จัดเก็บและแยกหมวดหมู่ผลงาน 4 ด้านตามมาตรฐาน ทปอ. บันทึกสิ่งที่ได้เรียนรู้ (Reflection) 
               และเชื่อมต่อตรงกับระบบแฟ้มสะสมผลงานอิเล็กทรอนิกส์ของ ทปอ. (tcasfolio.mytcas.com)
             </p>
@@ -149,7 +197,7 @@ export const PortfolioView: React.FC = () => {
               href="https://tcasfolio.mytcas.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white text-rose-700 font-bold text-xs sm:text-sm shadow-md hover:bg-rose-50 transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs sm:text-sm border border-white/10 transition-colors cursor-pointer"
             >
               <span>เชื่อมต่อเว็บ TCASfolio</span>
               <ExternalLink className="w-4 h-4" />
@@ -157,7 +205,7 @@ export const PortfolioView: React.FC = () => {
 
             <button
               onClick={() => setShowTcasFolioGuide(!showTcasFolioGuide)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 text-white font-semibold text-xs transition-all backdrop-blur-md cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors cursor-pointer"
             >
               <Info className="w-4 h-4" />
               <span>เกณฑ์ 10 หน้า ทปอ.</span>
@@ -168,7 +216,7 @@ export const PortfolioView: React.FC = () => {
                 setEditingItem(null);
                 setIsModalOpen(true);
               }}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs sm:text-sm shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>เพิ่มผลงาน</span>
@@ -179,10 +227,10 @@ export const PortfolioView: React.FC = () => {
 
       {/* TCASfolio Guide Section (Expandable) */}
       {showTcasFolioGuide && (
-        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-rose-200 shadow-sm animate-fadeIn space-y-4">
+        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-blue-200 shadow-xs animate-fadeIn space-y-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-rose-800 font-bold text-base">
-              <Sparkles className="w-5 h-5 text-rose-600" />
+            <div className="flex items-center gap-2 text-blue-950 font-bold text-base">
+              <Sparkles className="w-5 h-5 text-blue-600" />
               <span>ข้อกำหนดการจัดทำแฟ้มสะสมผลงาน 10 หน้า ตามเกณฑ์ ทปอ. (TCASfolio)</span>
             </div>
             <button
@@ -200,8 +248,8 @@ export const PortfolioView: React.FC = () => {
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200/80 space-y-1">
-              <span className="font-bold text-rose-900 block">ส่วนที่ 1: ประวัติ & เป้าหมาย (1-2 หน้า)</span>
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1">
+              <span className="font-bold text-slate-900 block">ส่วนที่ 1: ประวัติ & เป้าหมาย (1-2 หน้า)</span>
               <p className="text-slate-600">ประวัติส่วนตัว, ประวัติการศึกษา, เหตุผลที่อยากเข้าเรียน และ Statement of Purpose</p>
             </div>
 
@@ -210,8 +258,8 @@ export const PortfolioView: React.FC = () => {
               <p className="text-slate-600">โอลิมปิก สอวน., โครงงานวิทยาศาสตร์, แข่งขันทักษะวิชาการ และผลงานวิจัย</p>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-1">
-              <span className="font-bold text-amber-900 block">ส่วนที่ 3: กิจกรรม & ผู้นำ (2-3 หน้า)</span>
+            <div className="p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-1">
+              <span className="font-bold text-blue-900 block">ส่วนที่ 3: กิจกรรม & ผู้นำ (2-3 หน้า)</span>
               <p className="text-slate-600">กรรมการนักเรียน, การจัดค่าย, กีฬา/ดนตรี, การแสดง และการแข่งขันระดับกลุ่ม</p>
             </div>
 
@@ -230,14 +278,14 @@ export const PortfolioView: React.FC = () => {
           onClick={() => setSelectedCategory(selectedCategory === 'activity' ? 'all' : 'activity')}
           className={`p-4 rounded-3xl border text-left transition-all cursor-pointer ${
             selectedCategory === 'activity'
-              ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-[1.02]'
-              : 'bg-white border-slate-200 hover:border-amber-400 text-slate-800 shadow-xs'
+              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+              : 'bg-white border-slate-200 hover:border-blue-400 text-slate-800 shadow-xs'
           }`}
         >
           <div className="flex items-center justify-between mb-2">
             <span className="text-2xl">🎪</span>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-              selectedCategory === 'activity' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+              selectedCategory === 'activity' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-800'
             }`}>
               {activityCount} รายการ
             </span>
@@ -327,7 +375,7 @@ export const PortfolioView: React.FC = () => {
             placeholder="พิมพ์ค้นหาชื่อผลงาน, สถาบัน, ทักษะที่ได้เรียนรู้, หรือรายละเอียด..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 bg-slate-50/60"
+            className="w-full pl-9 pr-4 py-2 rounded-xl text-sm border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-slate-50/60"
           />
         </div>
 
@@ -369,7 +417,7 @@ export const PortfolioView: React.FC = () => {
       {/* Portfolio Items Grid */}
       {filteredItems.length === 0 ? (
         <div className="p-12 text-center bg-white rounded-3xl border border-slate-200 space-y-3">
-          <div className="w-16 h-16 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center mx-auto text-2xl">
+          <div className="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto text-2xl">
             📁
           </div>
           <h3 className="font-bold text-base text-slate-900">ไม่พบผลงานตามเงื่อนไขที่ค้นหา</h3>
@@ -383,7 +431,7 @@ export const PortfolioView: React.FC = () => {
               setEditingItem(null);
               setIsModalOpen(true);
             }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs transition-colors cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4" />
             <span>เพิ่มผลงานชิ้นแรก</span>
@@ -393,7 +441,7 @@ export const PortfolioView: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredItems.map((item) => {
             const badgeBg = item.category === 'activity' 
-              ? 'bg-amber-100 text-amber-900 border-amber-200' 
+              ? 'bg-blue-50 text-blue-800 border-blue-200' 
               : item.category === 'academic'
               ? 'bg-blue-100 text-blue-900 border-blue-200'
               : item.category === 'volunteer'
@@ -411,7 +459,7 @@ export const PortfolioView: React.FC = () => {
             return (
               <div 
                 key={item.id}
-                className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-amber-300 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                className="p-5 rounded-3xl bg-white border border-slate-200 hover:border-blue-300 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
               >
                 <div className="space-y-3">
                   {/* Category & Action bar */}
@@ -441,7 +489,7 @@ export const PortfolioView: React.FC = () => {
                           setEditingItem(item);
                           setIsModalOpen(true);
                         }}
-                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-amber-600 cursor-pointer"
+                        className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 cursor-pointer"
                         title="แก้ไขข้อมูลผลงาน"
                       >
                         <Edit className="w-4 h-4" />
@@ -479,16 +527,30 @@ export const PortfolioView: React.FC = () => {
                   {item.imageUrl && (
                     <div 
                       className="relative rounded-2xl overflow-hidden border border-slate-200 h-44 bg-slate-100 group cursor-pointer"
-                      onClick={() => setPreviewImage(item.imageUrl!)}
+                      onClick={() => setPreviewImage({ url: item.imageUrl!, title: item.title })}
                     >
                       <img 
                         src={item.imageUrl} 
                         alt={item.title} 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
                       />
-                      <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1.5">
-                        <Maximize2 className="w-4 h-4" />
-                        <span>คลิกเพื่อดูรูปขยาย</span>
+                      <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 p-2">
+                        <span className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/90 text-slate-900 font-semibold text-xs backdrop-blur-xs shadow-xs">
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>ดูรูปขยาย</span>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownloadImage(item.imageUrl!, item.title);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-colors cursor-pointer"
+                          title="บันทึกรูปภาพนี้ลงเครื่อง"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>เซฟรูป</span>
+                        </button>
                       </div>
                     </div>
                   )}
@@ -502,9 +564,9 @@ export const PortfolioView: React.FC = () => {
 
                   {/* Reflection Box (Crucial for TCAS) */}
                   {item.reflection && (
-                    <div className="p-3 rounded-2xl bg-amber-50/80 border border-amber-200/70 space-y-1">
-                      <div className="flex items-center gap-1 text-[11px] font-bold text-amber-900">
-                        <Sparkles className="w-3 h-3 text-amber-600" />
+                    <div className="p-3 rounded-2xl bg-blue-50/60 border border-blue-100 space-y-1">
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-blue-900">
+                        <Sparkles className="w-3 h-3 text-blue-600" />
                         <span>สิ่งที่ได้เรียนรู้ & ทักษะที่พัฒนา:</span>
                       </div>
                       <p className="text-xs text-slate-700 leading-relaxed">
@@ -521,7 +583,7 @@ export const PortfolioView: React.FC = () => {
                       href={item.linkUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-amber-600 hover:text-amber-700 font-semibold inline-flex items-center gap-1"
+                      className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1"
                     >
                       <span>ดูหลักฐาน/ลิงก์ผลงาน</span>
                       <ExternalLink className="w-3.5 h-3.5" />
@@ -557,20 +619,66 @@ export const PortfolioView: React.FC = () => {
         editingItem={editingItem}
       />
 
-      {/* Fullscreen Image Preview Modal */}
+      {/* Fullscreen Image Preview Modal with Save / Download capability */}
       {previewImage && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn"
           onClick={() => setPreviewImage(null)}
         >
-          <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-3xl bg-white p-2">
-            <button
-              onClick={() => setPreviewImage(null)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-slate-900/80 text-white hover:bg-slate-900 transition-colors z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <img src={previewImage} alt="Fullscreen preview" className="w-full h-auto max-h-[85vh] object-contain rounded-2xl" />
+          {/* Top Floating Control Bar */}
+          <div 
+            className="w-full max-w-4xl flex items-center justify-between gap-3 mb-3 px-4 py-2.5 rounded-2xl bg-slate-900/95 border border-slate-800 text-white shadow-xl backdrop-blur-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-blue-400 text-sm">🖼️</span>
+              <span className="font-semibold text-xs sm:text-sm text-slate-200 truncate">
+                {previewImage.title || 'รูปภาพผลงาน'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleDownloadImage(previewImage.url, previewImage.title)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition-colors cursor-pointer shadow-xs"
+                title="ดาวน์โหลดและบันทึกรูปลงเครื่อง"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>บันทึกรูปภาพ (Save)</span>
+              </button>
+
+              <a
+                href={previewImage.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                title="เปิดรูปภาพในแท็บใหม่"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+
+              <button
+                type="button"
+                onClick={() => setPreviewImage(null)}
+                className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="ปิดหน้าต่างรูปภาพ"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Image Container */}
+          <div 
+            className="relative max-w-4xl max-h-[82vh] overflow-hidden rounded-3xl bg-slate-900 border border-slate-800 shadow-2xl flex items-center justify-center p-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img 
+              src={previewImage.url} 
+              alt={previewImage.title} 
+              className="w-auto h-auto max-w-full max-h-[78vh] object-contain rounded-2xl" 
+            />
           </div>
         </div>
       )}

@@ -23,6 +23,9 @@ import {
   deleteDoc, 
   query, 
   orderBy, 
+  where,
+  limit,
+  getDocs,
   onSnapshot,
   writeBatch
 } from 'firebase/firestore';
@@ -60,6 +63,9 @@ export {
   deleteDoc,
   query,
   orderBy,
+  where,
+  limit,
+  getDocs,
   onSnapshot,
   writeBatch
 };

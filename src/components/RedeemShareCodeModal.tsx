@@ -84,8 +84,8 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
-        const match = text.match(/LM-?[A-Z0-9]{4}/i) || text.match(/[A-Z0-9]{6}/i);
-        const codeToUse = match ? match[0] : text.trim();
+        const match = text.match(/LM-?[A-Za-z0-9]{4}/i) || text.match(/[A-Za-z0-9]{6}/i) || text.match(/\b[A-Za-z0-9]{4}\b/i);
+        const codeToUse = match ? match[0].toUpperCase() : text.trim();
         setCode(codeToUse);
         await handleSearchCodeWithVal(codeToUse);
       }
@@ -160,11 +160,17 @@ export const RedeemShareCodeModal: React.FC<RedeemShareCodeModalProps> = ({
                     value={code}
                     onChange={(e) => {
                       const val = e.target.value;
-                      setCode(val);
                       if (errorMessage) setErrorMessage(null);
-                      // Auto trigger search if full 6-7 char code is entered or pasted
+                      const lmMatch = val.match(/LM-?[A-Za-z0-9]{4}/i);
+                      if (lmMatch && val.length > 7) {
+                        const extracted = lmMatch[0].toUpperCase();
+                        setCode(extracted);
+                        handleSearchCodeWithVal(extracted);
+                        return;
+                      }
+                      setCode(val);
                       const clean = val.trim().replace(/[^A-Za-z0-9]/g, '');
-                      if (clean.length === 6) {
+                      if (clean.length === 6 || clean.length === 4) {
                         handleSearchCodeWithVal(val);
                       }
                     }}

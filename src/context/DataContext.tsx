@@ -9,6 +9,9 @@ import {
   deleteDoc, 
   query, 
   orderBy, 
+  where,
+  limit,
+  getDocs,
   onSnapshot,
   writeBatch
 } from '../firebase';
@@ -989,13 +992,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       : shareCode;
     const shareId = 'shr_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
 
-    // Sanitize payload to keep it ultra-lightweight (<200KB) for instant network transport
+    // Sanitize payload to keep it ultra-lightweight (<200KB) for instant network transport and Firestore 1MB limits
     const lightweightPayload: SharedItemPayload = {
       ...payload,
+      fileData: payload.fileData && payload.fileData.length < 250000 ? payload.fileData : undefined,
       materials: payload.materials?.map(m => ({
         ...m,
-        // If file data exceeds 200KB, omit heavy base64 so upload and download are blazing fast
-        fileData: m.fileData && m.fileData.length < 200000 ? m.fileData : undefined,
+        // If file data exceeds 150KB, omit heavy base64 so upload and download are blazing fast
+        fileData: m.fileData && m.fileData.length < 150000 ? m.fileData : undefined,
       }))
     };
 
@@ -1023,7 +1027,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLocalData('lukmoo_private_shares', localShares);
 
-    // 2. Persist to Firestore immediately across all alias document IDs
+    // 2. Persist to Firestore across all alias document IDs
     const sanitized = sanitizeForFirestore(record);
     const writePromises = [
       setDoc(doc(db, 'shared_links', cleanCode), sanitized),
@@ -1034,9 +1038,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       writePromises.push(setDoc(doc(db, 'shared_links', suffixOnly), sanitized));
     }
 
-    Promise.all(writePromises).catch((e) => {
+    try {
+      await Promise.all(writePromises);
+    } catch (e) {
       console.error('Firestore shared_links save error:', e);
-    });
+    }
 
     const baseUrl = window.location.origin + window.location.pathname;
     const shareUrl = `${baseUrl}?code=${formattedCode}`;
@@ -1051,21 +1057,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resolvePrivateShare = async (shareCodeOrQuery?: string, shareId?: string): Promise<SharedItemPayload | null> => {
     if (!shareCodeOrQuery && !shareId) return null;
 
-    let query = (shareCodeOrQuery || shareId || '').trim();
+    let queryStr = (shareCodeOrQuery || shareId || '').trim();
 
-    // If a full link was pasted into the input, extract query parameters
-    if (query.includes('?') || query.includes('http')) {
+    // 1. Intelligently extract code from Thai invite message, Line message, or raw text
+    const lmRegexMatch = queryStr.match(/LM-?[A-Z0-9]{4}/i);
+    if (lmRegexMatch) {
+      queryStr = lmRegexMatch[0];
+    } else if (queryStr.includes('?') || queryStr.includes('http')) {
       try {
-        const urlObj = new URL(query, window.location.origin);
-        query = urlObj.searchParams.get('code') || 
-                urlObj.searchParams.get('c') ||
-                urlObj.searchParams.get('share_code') || 
-                urlObj.searchParams.get('share_id') || 
-                query;
+        const urlStr = queryStr.match(/https?:\/\/[^\s]+/)?.[0] || queryStr;
+        const urlObj = new URL(urlStr, window.location.origin);
+        queryStr = urlObj.searchParams.get('code') || 
+                   urlObj.searchParams.get('c') ||
+                   urlObj.searchParams.get('share_code') || 
+                   urlObj.searchParams.get('share_id') || 
+                   queryStr;
       } catch {}
+    } else {
+      const fourMatch = queryStr.match(/\b([A-Z0-9]{4})\b/i);
+      if (fourMatch && queryStr.length > 4) {
+        queryStr = fourMatch[1];
+      }
     }
 
-    const upper = query.toUpperCase().replace(/\s+/g, '');
+    const upper = queryStr.toUpperCase().replace(/[^A-Z0-9-]/g, '');
     const cleanNoHyphen = upper.replace(/-/g, '');
     const formattedHyphen = upper.includes('-') 
       ? upper 
@@ -1075,9 +1090,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const withLmHyphen = cleanNoHyphen.length === 4 ? `LM-${cleanNoHyphen}` : '';
     const suffixOnly = cleanNoHyphen.startsWith('LM') && cleanNoHyphen.length === 6 ? cleanNoHyphen.substring(2) : '';
 
-    // 1. Check local cache (instant 0ms)
+    const parseDocPayload = (data: any): SharedItemPayload | null => {
+      if (!data) return null;
+      const p = data.payload || (data.title ? data : null);
+      if (p && (p.title || data.title)) {
+        return {
+          ...p,
+          type: p.type || data.type || 'course',
+          title: p.title || data.title,
+        } as SharedItemPayload;
+      }
+      return null;
+    };
+
+    // 2. Check local cache (instant 0ms)
     const localShares = getLocalData<Record<string, any>>('lukmoo_private_shares', {});
-    const localFound = localShares[query] || 
+    const localFound = localShares[queryStr] || 
                        localShares[upper] || 
                        localShares[cleanNoHyphen] || 
                        localShares[formattedHyphen] || 
@@ -1086,11 +1114,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
                        (suffixOnly ? localShares[suffixOnly] : null) ||
                        (shareId ? localShares[shareId] : null);
 
-    if (localFound?.payload && localFound.payload.title) {
-      return localFound.payload as SharedItemPayload;
+    if (localFound) {
+      const parsedLocal = parseDocPayload(localFound);
+      if (parsedLocal) return parsedLocal;
     }
 
-    // 2. Check Firestore collection 'shared_links' in parallel (single roundtrip)
+    // 3. Check Firestore collection 'shared_links' by Document ID in parallel
     const lookupKeys = Array.from(new Set([
       cleanNoHyphen, 
       formattedHyphen, 
@@ -1098,7 +1127,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       withLmHyphen,
       suffixOnly,
       upper, 
-      query, 
+      queryStr, 
       shareId
     ].filter(Boolean))) as string[];
 
@@ -1110,10 +1139,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const snap = snaps[i];
         if (snap && snap.exists()) {
           const data = snap.data();
-          if (data?.payload && data.payload.title && data.payload.type) {
+          const parsed = parseDocPayload(data);
+          if (parsed) {
             localShares[lookupKeys[i]] = data;
             setLocalData('lukmoo_private_shares', localShares);
-            return data.payload as SharedItemPayload;
+            return parsed;
           }
         }
       }
@@ -1121,7 +1151,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Firestore parallel shared link fetch error:', err);
     }
 
-    // 3. Check community_posts collection as fallback (in case user pasted a community post ID or reference)
+    // 4. Fallback: Query Firestore by fields ('cleanCode' or 'shareCode')
+    try {
+      const searchTerms = Array.from(new Set([cleanNoHyphen, formattedHyphen, withLm, suffixOnly].filter(Boolean)));
+      if (searchTerms.length > 0) {
+        const qClean = query(collection(db, 'shared_links'), where('cleanCode', 'in', searchTerms.slice(0, 10)));
+        const snapClean = await getDocs(qClean).catch(() => null);
+        if (snapClean && !snapClean.empty) {
+          const parsed = parseDocPayload(snapClean.docs[0].data());
+          if (parsed) return parsed;
+        }
+
+        const qShare = query(collection(db, 'shared_links'), where('shareCode', 'in', searchTerms.slice(0, 10)));
+        const snapShare = await getDocs(qShare).catch(() => null);
+        if (snapShare && !snapShare.empty) {
+          const parsed = parseDocPayload(snapShare.docs[0].data());
+          if (parsed) return parsed;
+        }
+      }
+    } catch (err) {
+      console.warn('Firestore field query error:', err);
+    }
+
+    // 5. Check community_posts collection as fallback (in case user pasted a community post ID or reference)
     try {
       for (const k of lookupKeys.slice(0, 3)) {
         const postSnap = await getDoc(doc(db, 'community_posts', k)).catch(() => null);
@@ -1134,17 +1186,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch {}
 
-    // 3. Backward compatibility: Base64 decode for older long share codes
-    if (query.length > 25) {
+    // 6. Backward compatibility: Base64 decode for older long share codes
+    if (queryStr.length > 25) {
       try {
         const decoded = decodeURIComponent(
-          Array.prototype.map.call(atob(decodeURIComponent(query)), (c: string) => {
+          Array.prototype.map.call(atob(decodeURIComponent(queryStr)), (c: string) => {
             return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
           }).join('')
         );
         const parsed = JSON.parse(decoded);
-        if (parsed && parsed.title && parsed.type) {
-          return parsed as SharedItemPayload;
+        if (parsed && parsed.title) {
+          return {
+            ...parsed,
+            type: parsed.type || 'course',
+          } as SharedItemPayload;
         }
       } catch {}
     }

@@ -17,8 +17,9 @@ import { PortfolioView } from './components/PortfolioView';
 import { ShareModal } from './components/ShareModal';
 import { RedeemShareCodeModal } from './components/RedeemShareCodeModal';
 import { UnauthenticatedView } from './components/UnauthenticatedView';
+import { SyncDiagnosticView } from './components/SyncDiagnosticView';
 import { ActiveTab, Course, CourseMaterial, CalendarEvent, SharedItemPayload } from './types';
-import { Cloud, Loader2, Download, CheckCircle2, X } from 'lucide-react';
+import { Cloud, Loader2, Download, CheckCircle2, X, AlertTriangle, ExternalLink, HardDrive, Terminal } from 'lucide-react';
 
 const AppContent: React.FC = () => {
   const { user, loading: authLoading, syncStatus } = useAuth();
@@ -41,10 +42,26 @@ const AppContent: React.FC = () => {
     deleteEvent, 
     toggleEventCompleted,
     importSharedItem,
-    resolvePrivateShare
+    resolvePrivateShare,
+    isQuotaExceeded,
+    quotaDismissed,
+    dismissQuotaBanner,
+    firebaseConsoleUrl
   } = useData();
 
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
+  const [showDebugSync, setShowDebugSync] = useState(false);
+
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === '#debug-sync' || window.location.pathname.endsWith('/debug/sync')) {
+        setShowDebugSync(true);
+      }
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => window.removeEventListener('hashchange', checkHash);
+  }, []);
 
   // Modals state
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -302,9 +319,53 @@ const AppContent: React.FC = () => {
         onOpenProfileModal={() => setIsProfileModalOpen(true)}
       />
 
+      {/* Quota Exceeded Notification Banner */}
+      {isQuotaExceeded && !quotaDismissed && (
+        <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm border-b border-amber-600">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 text-xs sm:text-sm">
+            <div className="flex items-start sm:items-center gap-2.5">
+              <div className="p-1 rounded-md bg-amber-400/30 shrink-0 mt-0.5 sm:mt-0">
+                <AlertTriangle className="w-4 h-4 text-white" />
+              </div>
+              <p className="leading-snug text-white/95">
+                <strong className="font-semibold text-white">โควตา Cloud Firestore ฟรีประจำวันเต็มแล้ว:</strong> ข้อมูลของคุณยังถูกบันทึกในเครื่องนี้ (Local Cache) อย่างปลอดภัย ใช้งานได้ครบ 100%
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+              <a
+                href={firebaseConsoleUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-white text-amber-900 font-semibold text-xs shadow-xs hover:bg-amber-50 transition-colors"
+              >
+                <span>จัดการโควตา / อัปเกรด</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <button
+                onClick={dismissQuotaBanner}
+                className="p-1 rounded-md hover:bg-amber-700/50 text-white/80 hover:text-white transition-colors"
+                title="ปิดการแจ้งเตือน"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-12">
-        {!user ? (
+        {showDebugSync ? (
+          <div className="space-y-4">
+            <button
+              onClick={() => setShowDebugSync(false)}
+              className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+            >
+              <span>← กลับสู่หน้าหลัก</span>
+            </button>
+            <SyncDiagnosticView />
+          </div>
+        ) : !user ? (
           /* Unauthenticated state: Shows welcome hero and prompts login */
           <UnauthenticatedView onOpenAuthModal={() => setIsAuthModalOpen(true)} />
         ) : (

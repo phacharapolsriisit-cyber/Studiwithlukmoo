@@ -51,8 +51,19 @@ export function isQuotaError(err: any): boolean {
          msg.includes('resource-exhausted') ||
          msg.includes('Quota exceeded') ||
          msg.includes('Free daily write units') ||
-         msg.includes('maximum backoff delay');
+         msg.includes('maximum backoff delay') ||
+         msg.includes('timed out');
 }
+
+// Timeout wrapper for Firestore cloud writes to prevent hanging UI
+export const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 3500): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore operation timed out or quota exceeded')), timeoutMs)
+    ),
+  ]);
+};
 
 // LocalStorage helpers
 export const getLocalData = <T,>(key: string, fallback: T): T => {
@@ -184,12 +195,49 @@ interface DataContextType {
   showPinnedTCAS: boolean;
   setShowPinnedTCAS: (show: boolean) => void;
   allEvents: CalendarEvent[];
+  isQuotaExceeded: boolean;
+  quotaDismissed: boolean;
+  dismissQuotaBanner: () => void;
+  firebaseConsoleUrl: string;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, profile, markSyncing, markSynced, markSyncError } = useAuth();
+
+  // Quota exhaustion tracking
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('lukmoo_quota_exceeded') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const [quotaDismissed, setQuotaDismissed] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('lukmoo_quota_dismissed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleQuotaExceeded = useCallback(() => {
+    setIsQuotaExceeded(true);
+    try {
+      sessionStorage.setItem('lukmoo_quota_exceeded', 'true');
+    } catch {}
+  }, []);
+
+  const dismissQuotaBanner = useCallback(() => {
+    setQuotaDismissed(true);
+    try {
+      sessionStorage.setItem('lukmoo_quota_dismissed', 'true');
+    } catch {}
+  }, []);
+
+  const firebaseConsoleUrl = "https://console.firebase.google.com/project/lukmoo-tutor/firestore/databases/ai-studio-d47d47f8-d5f9-45d5-9cb9-a031ee128943/data?openUpgradeDialog=true";
 
   // Active user ID helper
   const getUid = useCallback(() => {
@@ -243,8 +291,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTcasCompletedIds(prev => {
       const next = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
       setLocalData('lukmoo_tcas_completed_ids', next);
-      if (user && !user.isDemo) {
-        updateDoc(doc(db, 'users', user.uid), { tcasCompletedIds: next }).catch(() => {});
+      if (user && !user.isDemo && !isQuotaExceeded) {
+        updateDoc(doc(db, 'users', user.uid), { tcasCompletedIds: next }).catch((err) => {
+          if (isQuotaError(err)) handleQuotaExceeded();
+        });
       }
       return next;
     });
@@ -254,8 +304,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setHiddenTcasIds(prev => {
       const next = [...prev, id];
       setLocalData('lukmoo_hidden_tcas_ids', next);
-      if (user && !user.isDemo) {
-        updateDoc(doc(db, 'users', user.uid), { hiddenTcasIds: next }).catch(() => {});
+      if (user && !user.isDemo && !isQuotaExceeded) {
+        updateDoc(doc(db, 'users', user.uid), { hiddenTcasIds: next }).catch((err) => {
+          if (isQuotaError(err)) handleQuotaExceeded();
+        });
       }
       return next;
     });
@@ -264,8 +316,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const handleSetShowPinnedTCAS = (show: boolean) => {
     setShowPinnedTCAS(show);
     setLocalData('lukmoo_show_pinned_tcas', show);
-    if (user && !user.isDemo) {
-      updateDoc(doc(db, 'users', user.uid), { showPinnedTCAS: show }).catch(() => {});
+    if (user && !user.isDemo && !isQuotaExceeded) {
+      updateDoc(doc(db, 'users', user.uid), { showPinnedTCAS: show }).catch((err) => {
+        if (isQuotaError(err)) handleQuotaExceeded();
+      });
     }
   };
 
@@ -546,13 +600,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // 2. Persist to Firestore Cloud if authenticated
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
         const courseDocRef = doc(db, 'users', user.uid, 'courses', newId);
-        await setDoc(courseDocRef, sanitizeForFirestore(newCourse));
+        await withTimeout(setDoc(courseDocRef, sanitizeForFirestore(newCourse)));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice saving course to Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice saving course to Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -579,13 +637,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
         const courseRef = doc(db, 'users', user.uid, 'courses', id);
-        await setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true });
+        await withTimeout(setDoc(courseRef, sanitizeForFirestore(updatedFields), { merge: true }));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice updating course in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice updating course in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -614,17 +676,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
-        await deleteDoc(doc(db, 'users', user.uid, 'courses', id));
+        await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'courses', id)));
         for (const mId of relatedMatIds) {
-          await deleteDoc(doc(db, 'users', user.uid, 'materials', mId)).catch(() => {});
+          await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'materials', mId))).catch(() => {});
         }
         for (const eId of relatedEvIds) {
-          await deleteDoc(doc(db, 'users', user.uid, 'events', eId)).catch(() => {});
+          await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'events', eId))).catch(() => {});
         }
       } catch (err: any) {
-        console.warn('Notice deleting course from Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice deleting course from Firestore:', err?.message);
+        }
       }
     }
     markSynced();
@@ -637,7 +703,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCourses(reindexed);
     setLocalData(getCacheKey('courses'), reindexed);
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       if (reorderCoursesTimerRef.current) clearTimeout(reorderCoursesTimerRef.current);
       reorderCoursesTimerRef.current = setTimeout(async () => {
         try {
@@ -649,7 +715,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           await batch.commit();
           markSynced();
-        } catch (err) {
+        } catch (err: any) {
+          if (isQuotaError(err)) handleQuotaExceeded();
           markSynced();
         }
       }, 1500);
@@ -677,13 +744,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
         const matDocRef = doc(db, 'users', user.uid, 'materials', newId);
-        await setDoc(matDocRef, sanitizeForFirestore(newMaterial));
+        await withTimeout(setDoc(matDocRef, sanitizeForFirestore(newMaterial)));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice saving material to Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice saving material to Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -703,13 +774,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
         const matDocRef = doc(db, 'users', user.uid, 'materials', id);
-        await setDoc(matDocRef, sanitizeForFirestore(updatedFields), { merge: true });
+        await withTimeout(setDoc(matDocRef, sanitizeForFirestore(updatedFields), { merge: true }));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice updating material in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice updating material in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -725,11 +800,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
-        await deleteDoc(doc(db, 'users', user.uid, 'materials', id));
+        await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'materials', id)));
       } catch (err: any) {
-        console.warn('Notice deleting material in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice deleting material in Firestore:', err?.message);
+        }
       }
     }
     markSynced();
@@ -748,7 +827,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMaterials(allMaterials);
     setLocalData(getCacheKey('materials'), allMaterials);
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       if (reorderMaterialsTimerRef.current) clearTimeout(reorderMaterialsTimerRef.current);
       reorderMaterialsTimerRef.current = setTimeout(async () => {
         try {
@@ -758,9 +837,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const ref = doc(db, 'users', user.uid, 'materials', mat.id);
             batch.set(ref, { orderIndex: mat.orderIndex, updatedAt: mat.updatedAt }, { merge: true });
           });
-          await batch.commit();
+          await withTimeout(batch.commit());
           markSynced();
-        } catch (err) {
+        } catch (err: any) {
+          if (isQuotaError(err)) handleQuotaExceeded();
           markSynced();
         }
       }, 1500);
@@ -787,13 +867,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
         const evDocRef = doc(db, 'users', user.uid, 'events', newId);
-        await setDoc(evDocRef, sanitizeForFirestore(newEvent));
+        await withTimeout(setDoc(evDocRef, sanitizeForFirestore(newEvent)));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice saving event to Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice saving event to Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -817,13 +901,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
         const evDocRef = doc(db, 'users', user.uid, 'events', id);
-        await setDoc(evDocRef, sanitizeForFirestore(updatedFields), { merge: true });
+        await withTimeout(setDoc(evDocRef, sanitizeForFirestore(updatedFields), { merge: true }));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice updating event in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice updating event in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -843,11 +931,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
-        await deleteDoc(doc(db, 'users', user.uid, 'events', id));
+        await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'events', id)));
       } catch (err: any) {
-        console.warn('Notice deleting event in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice deleting event in Firestore:', err?.message);
+        }
       }
     }
     markSynced();
@@ -881,11 +973,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
-        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', newId), sanitizeForFirestore(newItem));
+        await withTimeout(setDoc(doc(db, 'users', user.uid, 'portfolio_items', newId), sanitizeForFirestore(newItem)));
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice saving portfolio item to Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice saving portfolio item to Firestore:', err?.message);
+        }
       }
     }
     markSynced();
@@ -903,12 +999,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
-        await setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedFields), { merge: true });
+        await withTimeout(setDoc(doc(db, 'users', user.uid, 'portfolio_items', id), sanitizeForFirestore(updatedFields), { merge: true }));
         markSynced();
       } catch (err: any) {
-        if (!isQuotaError(err)) console.warn('Notice updating portfolio item in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice updating portfolio item in Firestore:', err?.message);
+        }
         markSynced();
       }
     } else {
@@ -924,11 +1024,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return updated;
     });
 
-    if (user && !user.isDemo) {
+    if (user && !user.isDemo && !isQuotaExceeded) {
       try {
-        await deleteDoc(doc(db, 'users', user.uid, 'portfolio_items', id));
+        await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'portfolio_items', id)));
       } catch (err: any) {
-        console.warn('Notice deleting portfolio item in Firestore:', err?.message);
+        if (isQuotaError(err)) {
+          handleQuotaExceeded();
+        } else {
+          console.warn('Notice deleting portfolio item in Firestore:', err?.message);
+        }
       }
     }
     markSynced();
@@ -1440,6 +1544,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       showPinnedTCAS,
       setShowPinnedTCAS: handleSetShowPinnedTCAS,
       allEvents,
+      isQuotaExceeded,
+      quotaDismissed,
+      dismissQuotaBanner,
+      firebaseConsoleUrl,
     }}>
       {children}
     </DataContext.Provider>

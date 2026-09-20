@@ -33,7 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenProfileModal,
 }) => {
   const { user, profile, syncStatus, lastSyncTime } = useAuth();
-  const { syncWithCloud } = useData();
+  const { syncWithCloud, isQuotaExceeded } = useData();
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs">
@@ -146,15 +146,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className={`hidden xl:flex items-center gap-2 px-2.5 py-1 rounded-lg border text-xs transition-all ${
                   user.isDemo 
                     ? 'bg-orange-50 border-orange-200 text-orange-700 cursor-default' 
+                    : isQuotaExceeded
+                    ? 'bg-amber-50 border-amber-200 text-amber-800 cursor-pointer'
                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-blue-50 hover:border-blue-200 cursor-pointer'
                 }`}
                 title={user.isDemo 
                   ? 'โหมดทดลอง: ข้อมูลบันทึกเฉพาะในเครื่องนี้เท่านั้น' 
+                  : isQuotaExceeded
+                  ? 'โควตา Cloud ฟรีประจำวันเต็ม: ข้อมูลบันทึกใน Local Storage ของเครื่องนี้อย่างปลอดภัย'
                   : `เชื่อมต่อ Firebase: lukmoo-tutor (${lastSyncTime ? 'ซิงค์ล่าสุด ' + lastSyncTime.toLocaleTimeString('th-TH') : 'กำลังซิงค์'}) - คลิกเพื่อซิงค์ข้อมูลด้วยตนเอง`
                 }
               >
                 {user.isDemo ? (
                   <Sparkles className="w-3 h-3 text-orange-500" />
+                ) : isQuotaExceeded ? (
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
                 ) : syncStatus === 'syncing' ? (
                   <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
                 ) : syncStatus === 'error' ? (
@@ -165,11 +171,21 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="font-medium">
                   {user.isDemo ? 'Local Mode' : 'lukmoo-tutor'}
                 </span>
-                <span className={`text-[11px] ${user.isDemo ? 'text-orange-600/70' : 'text-slate-400'}`}>
-                  {user.isDemo ? 'ไม่ซิงค์ข้ามเครื่อง' : syncStatus === 'syncing' ? 'กำลังซิงค์...' : syncStatus === 'error' ? 'เชื่อมต่อล้มเหลว' : 'คลาวด์พร้อม'}
+                <span className={`text-[11px] ${user.isDemo ? 'text-orange-600/70' : isQuotaExceeded ? 'text-amber-700 font-medium' : 'text-slate-400'}`}>
+                  {user.isDemo ? 'ไม่ซิงค์ข้ามเครื่อง' : isQuotaExceeded ? 'Local Cache (โควตาเต็ม)' : syncStatus === 'syncing' ? 'กำลังซิงค์...' : syncStatus === 'error' ? 'เชื่อมต่อล้มเหลว' : 'คลาวด์พร้อม'}
                 </span>
               </button>
             )}
+
+            {/* Sync Diagnostic Tool Link */}
+            <a
+              id="sync-diagnostic-nav-btn"
+              href="#debug-sync"
+              className="hidden lg:flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors border border-slate-200"
+              title="เปิดหน้าทดสอบ Sync Diagnostic"
+            >
+              <span>Sync Test</span>
+            </a>
 
             {/* User Profile or Login Button */}
             {user ? (
